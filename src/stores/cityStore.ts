@@ -307,10 +307,29 @@ export const useCityStore = create<CityStore>()(
       placeRoad: (position) => {
         const state = get()
         const tile = state.getTile(position)
-        if (!tile || tile.buildingId || tile.roadId) return null
+        
+        console.log('[placeRoad] Position:', position)
+        console.log('[placeRoad] Tile:', tile)
+        console.log('[placeRoad] Balance:', state.economy.balance)
+        
+        if (!tile) {
+          console.log('[placeRoad] FAILED: No tile at position')
+          return null
+        }
+        if (tile.buildingId) {
+          console.log('[placeRoad] FAILED: Tile has building')
+          return null
+        }
+        if (tile.roadId) {
+          console.log('[placeRoad] FAILED: Tile already has road')
+          return null
+        }
         
         const roadCost = 10
-        if (state.economy.balance < roadCost) return null
+        if (state.economy.balance < roadCost) {
+          console.log('[placeRoad] FAILED: Not enough money')
+          return null
+        }
         
         const roadId = generateId()
         

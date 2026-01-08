@@ -43,7 +43,9 @@ function GridInitializer() {
   const tiles = useCityStore((state) => state.tiles)
   
   useEffect(() => {
+    console.log('[GridInitializer] tiles.size:', tiles.size)
     if (tiles.size === 0) {
+      console.log('[GridInitializer] Initializing grid...')
       initializeGrid()
     }
   }, [initializeGrid, tiles.size])

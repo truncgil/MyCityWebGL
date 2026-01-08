@@ -10,7 +10,7 @@ export const TILE_HEIGHT = 0.1 // Base tile height
 // Camera Constants
 // ============================================
 
-export const CAMERA_DEFAULT_ZOOM = 15
+export const CAMERA_DEFAULT_ZOOM = 1
 export const CAMERA_MIN_ZOOM = 5
 export const CAMERA_MAX_ZOOM = 50
 export const CAMERA_PAN_SPEED = 0.5
