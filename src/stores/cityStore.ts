@@ -7,7 +7,7 @@ import {
   SaveData,
 } from '@/types/game.types'
 import { Building, BuildingDefinition, DEFAULT_BUILDINGS } from '@/types/building.types'
-import { Road, EconomyState, PopulationState, ZoneDemand } from '@/types/simulation.types'
+import { Road, EconomyState, PopulationState, ZoneDemand, Direction, RoadConnection } from '@/types/simulation.types'
 import {
   GRID_SIZE,
   STORAGE_KEYS,
@@ -226,36 +226,90 @@ export const useCityStore = create<CityStore>()(
         const shouldFaceRoad = ['residential', 'commercial', 'industrial'].includes(definition.category)
         
         if (shouldFaceRoad && state.roads.size > 0) {
-          const buildingCenterX = position.x + definition.size.width / 2
-          const buildingCenterZ = position.z + definition.size.depth / 2
+          // Check for roads adjacent to the building (on all 4 sides)
+          const roadSides: { side: 'north' | 'south' | 'east' | 'west', distance: number }[] = []
           
-          // Find nearest road
-          let nearestRoad: { x: number; z: number } | null = null
-          let minDistance = Infinity
-          
-          for (const road of state.roads.values()) {
-            const dx = road.position.x - buildingCenterX
-            const dz = road.position.z - buildingCenterZ
-            const distance = Math.sqrt(dx * dx + dz * dz)
-            
-            if (distance < minDistance) {
-              minDistance = distance
-              nearestRoad = road.position
+          // Check North side (z - 1)
+          for (let dx = 0; dx < definition.size.width; dx++) {
+            const checkPos = { x: position.x + dx, z: position.z - 1 }
+            const tile = state.getTile(checkPos)
+            if (tile?.roadId) {
+              roadSides.push({ side: 'north', distance: 1 })
+              break
             }
           }
           
-          // Calculate rotation to face road
-          if (nearestRoad && minDistance < 10) {
-            const dx = nearestRoad.x - buildingCenterX
-            const dz = nearestRoad.z - buildingCenterZ
+          // Check South side (z + depth)
+          for (let dx = 0; dx < definition.size.width; dx++) {
+            const checkPos = { x: position.x + dx, z: position.z + definition.size.depth }
+            const tile = state.getTile(checkPos)
+            if (tile?.roadId) {
+              roadSides.push({ side: 'south', distance: 1 })
+              break
+            }
+          }
+          
+          // Check West side (x - 1)
+          for (let dz = 0; dz < definition.size.depth; dz++) {
+            const checkPos = { x: position.x - 1, z: position.z + dz }
+            const tile = state.getTile(checkPos)
+            if (tile?.roadId) {
+              roadSides.push({ side: 'west', distance: 1 })
+              break
+            }
+          }
+          
+          // Check East side (x + width)
+          for (let dz = 0; dz < definition.size.depth; dz++) {
+            const checkPos = { x: position.x + definition.size.width, z: position.z + dz }
+            const tile = state.getTile(checkPos)
+            if (tile?.roadId) {
+              roadSides.push({ side: 'east', distance: 1 })
+              break
+            }
+          }
+          
+          // If no adjacent roads, find nearest road within 3 tiles
+          if (roadSides.length === 0) {
+            const buildingCenterX = position.x + definition.size.width / 2
+            const buildingCenterZ = position.z + definition.size.depth / 2
             
-            // Determine which direction the road is (N, S, E, W)
-            if (Math.abs(dx) > Math.abs(dz)) {
-              // Road is to the East or West
-              finalRotation = dx > 0 ? 90 : 270
-            } else {
-              // Road is to the North or South
-              finalRotation = dz > 0 ? 180 : 0
+            for (const road of Array.from(state.roads.values())) {
+              const dx = road.position.x - buildingCenterX
+              const dz = road.position.z - buildingCenterZ
+              const distance = Math.sqrt(dx * dx + dz * dz)
+              
+              if (distance <= 3) {
+                // Determine which side the road is on
+                if (Math.abs(dx) > Math.abs(dz)) {
+                  roadSides.push({ side: dx > 0 ? 'east' : 'west', distance })
+                } else {
+                  roadSides.push({ side: dz > 0 ? 'south' : 'north', distance })
+                }
+              }
+            }
+          }
+          
+          // Choose the closest road side
+          if (roadSides.length > 0) {
+            roadSides.sort((a, b) => a.distance - b.distance)
+            const bestSide = roadSides[0].side
+            
+            // Set rotation to face the road
+            // In isometric view: 0° = North, 90° = East, 180° = South, 270° = West
+            switch (bestSide) {
+              case 'north':
+                finalRotation = 0
+                break
+              case 'east':
+                finalRotation = 90
+                break
+              case 'south':
+                finalRotation = 180
+                break
+              case 'west':
+                finalRotation = 270
+                break
             }
           }
         }
@@ -373,7 +427,7 @@ export const useCityStore = create<CityStore>()(
           west: getNeighborRoadId(position.x - 1, position.z),
         }
         
-        const newConnections: { connectedTo: string }[] = []
+        const newConnections: RoadConnection[] = []
         const roadsToUpdate = new Map<string, Road>()
         const roads = new Map(state.roads)
 
@@ -383,16 +437,32 @@ export const useCityStore = create<CityStore>()(
             const neighborRoad = roads.get(neighborId)
             if (neighborRoad) {
               // Add neighbor to new road's connections
-              const neighborKey = gridPositionToKey(neighborRoad.position)
-              newConnections.push({ connectedTo: neighborKey })
+              newConnections.push({ 
+                direction: dir as Direction, 
+                connectedTo: neighborId 
+              })
 
               // Add new road to neighbor's connections
-              const newRoadKey = gridPositionToKey(position)
-              if (!neighborRoad.connections.some(c => c.connectedTo === newRoadKey)) {
+              // Calculate opposite direction
+              const oppositeDir: Direction = 
+                dir === 'north' ? 'south' :
+                dir === 'south' ? 'north' :
+                dir === 'east' ? 'west' : 'east'
+              
+              if (!neighborRoad.connections.some(c => c.connectedTo === roadId)) {
                  // Clone neighbor to update
-                 const updatedNeighbor = {
+                 const updatedNeighbor: Road = {
                    ...neighborRoad,
-                   connections: [...neighborRoad.connections, { connectedTo: newRoadKey }]
+                   connections: [
+                     ...neighborRoad.connections.map(c => ({
+                       direction: c.direction,
+                       connectedTo: c.connectedTo
+                     })),
+                     { 
+                       direction: oppositeDir, 
+                       connectedTo: roadId 
+                     }
+                   ]
                  }
                  roads.set(neighborId, updatedNeighbor)
                  roadsToUpdate.set(neighborId, updatedNeighbor)
@@ -438,18 +508,13 @@ export const useCityStore = create<CityStore>()(
         // Remove connections from neighbors
         road.connections.forEach(conn => {
           if (conn.connectedTo) {
-             const neighborPos = keyToGridPosition(conn.connectedTo)
-             const neighborTile = state.getTile(neighborPos)
-             if (neighborTile?.roadId) {
-               const neighborRoad = roads.get(neighborTile.roadId)
-               if (neighborRoad) {
-                 const roadKey = gridPositionToKey(road.position)
-                 const updatedNeighbor = {
-                   ...neighborRoad,
-                   connections: neighborRoad.connections.filter(c => c.connectedTo !== roadKey)
-                 }
-                 roads.set(neighborTile.roadId, updatedNeighbor)
+             const neighborRoad = roads.get(conn.connectedTo)
+             if (neighborRoad) {
+               const updatedNeighbor: Road = {
+                 ...neighborRoad,
+                 connections: neighborRoad.connections.filter(c => c.connectedTo !== roadId)
                }
+               roads.set(conn.connectedTo, updatedNeighbor)
              }
           }
         })

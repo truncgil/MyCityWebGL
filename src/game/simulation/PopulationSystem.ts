@@ -91,16 +91,25 @@ export class PopulationSystem extends BaseSimulationSystem {
       }
     })
 
-    // Update population stats
-    const totalPopulation = Math.floor(occupiedCapacity)
-    const workers = Math.floor(totalPopulation * 0.6) // 60% are workers
+    // Calculate available capacity (max population that can live in residential buildings)
+    const maxPopulation = Math.floor(occupiedCapacity)
+    
+    // Update residential capacity
+    population.residential = totalCapacity
+    
+    // Don't override total population here - let it grow naturally
+    // Only cap it if it exceeds capacity
+    if (population.total > maxPopulation && maxPopulation > 0) {
+      population.total = maxPopulation
+    }
+    
+    // Calculate workers and employment
+    const workers = Math.floor(population.total * 0.6) // 60% are workers
     const employed = Math.min(workers, Math.floor(filledJobs))
     const unemployed = workers - employed
     const employmentRate = workers > 0 ? employed / workers : 0
 
     Object.assign(population, {
-      total: totalPopulation,
-      residential: totalCapacity,
       workers,
       employed,
       unemployed,
@@ -109,8 +118,8 @@ export class PopulationSystem extends BaseSimulationSystem {
 
     // Emit population change event
     GameEvents.populationChanged({
-      total: totalPopulation,
-      delta: totalPopulation - population.total,
+      total: population.total,
+      delta: 0, // Delta will be calculated in processGrowth
     })
   }
 
