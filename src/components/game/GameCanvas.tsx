@@ -24,6 +24,7 @@ import { GameLoop } from './GameLoop'
 import { TrafficSystem } from './TrafficSystem'
 import { PedestrianSystem } from './PedestrianSystem'
 import { StatusOverlay } from './StatusOverlay'
+import { ServiceRadiusOverlay } from './ServiceRadiusOverlay'
 import { GRID_SIZE, TILE_SIZE } from '@/lib/constants'
 
 // Scene setup component
@@ -117,6 +118,9 @@ function Scene() {
 
       {/* Status Icons */}
       <StatusOverlay />
+      
+      {/* Service Radius (when clicking utility buildings) */}
+      <ServiceRadiusOverlay />
       
       {/* Tile Highlight */}
       <TileHighlight />

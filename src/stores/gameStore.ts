@@ -16,6 +16,7 @@ interface GameStore {
   selectedBuilding: string | null
   selectedZone: 'residential' | 'commercial' | 'industrial' | null
   hoveredTile: GridPosition | null
+  clickedBuildingId: string | null // Currently clicked building for showing service radius
   overlay: OverlayType
   isPlacing: boolean
   rotation: number
@@ -33,6 +34,7 @@ interface GameStore {
   setSelectedBuilding: (buildingId: string | null) => void
   setSelectedZone: (zone: 'residential' | 'commercial' | 'industrial' | null) => void
   setHoveredTile: (position: GridPosition | null) => void
+  setClickedBuilding: (buildingId: string | null) => void
   setOverlay: (overlay: OverlayType) => void
   setIsPlacing: (isPlacing: boolean) => void
   rotateBuilding: () => void
@@ -68,6 +70,7 @@ export const useGameStore = create<GameStore>()(
       selectedBuilding: null,
       selectedZone: null,
       hoveredTile: null,
+      clickedBuildingId: null,
       overlay: 'none',
       isPlacing: false,
       rotation: 0,
@@ -83,6 +86,7 @@ export const useGameStore = create<GameStore>()(
         mode, 
         selectedBuilding: mode !== 'build' ? null : get().selectedBuilding,
         selectedZone: mode !== 'zone' ? null : get().selectedZone,
+        clickedBuildingId: null,
       }),
       
       setSelectedBuilding: (buildingId) => set({ 
@@ -96,6 +100,8 @@ export const useGameStore = create<GameStore>()(
       }),
       
       setHoveredTile: (position) => set({ hoveredTile: position }),
+      
+      setClickedBuilding: (buildingId) => set({ clickedBuildingId: buildingId }),
       
       setOverlay: (overlay) => set({ overlay }),
       
@@ -151,6 +157,7 @@ export const useGameStore = create<GameStore>()(
         selectedBuilding: null,
         selectedZone: null,
         hoveredTile: null,
+        clickedBuildingId: null,
         overlay: 'none',
         isPlacing: false,
         rotation: 0,

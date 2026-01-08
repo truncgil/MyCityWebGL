@@ -15,7 +15,7 @@ DEFAULT_BUILDINGS.forEach((building) => {
   useGLTF.preload(building.modelPath)
 })
 
-// GLTF Model building component
+// GLTF Model building component with construction animation
 function GLTFBuilding({
   building,
   definition,
@@ -23,9 +23,42 @@ function GLTFBuilding({
   building: Building
   definition: ReturnType<typeof useCityStore.getState>['buildingCatalog'][0]
 }) {
+  const groupRef = useRef<THREE.Group>(null)
   const worldPos = gridToWorld(building.position)
   const { width, depth } = definition.size
   const rotationY = (building.rotation * Math.PI) / 180
+  
+  // Check if building has utilities (utilities and parks don't need them)
+  const isUtility = definition.category === 'utility'
+  const isPark = definition.category === 'park'
+  const needsUtilities = !isUtility
+  const hasUtilities = isUtility || isPark || (building.isPowered && building.hasWater)
+  
+  // Animation state
+  const scaleRef = useRef(hasUtilities ? 1 : 0.3)
+  const targetScale = hasUtilities ? 1 : 0.3
+  
+  // Animate scale
+  useFrame((_, delta) => {
+    if (groupRef.current) {
+      // Smooth scale transition
+      scaleRef.current += (targetScale - scaleRef.current) * delta * 3
+      groupRef.current.scale.setScalar(scaleRef.current)
+      
+      // Update material opacity for unbuilt buildings
+      if (!hasUtilities && needsUtilities) {
+        groupRef.current.traverse((child) => {
+          if (child instanceof THREE.Mesh && child.material) {
+            const mat = child.material as THREE.MeshStandardMaterial
+            if (mat.transparent !== undefined) {
+              mat.transparent = true
+              mat.opacity = 0.5
+            }
+          }
+        })
+      }
+    }
+  })
 
   try {
     const { scene } = useGLTF(definition.modelPath)
@@ -41,20 +74,20 @@ function GLTFBuilding({
     }, [scene])
 
     return (
-      <primitive
-        object={clonedScene}
+      <group
+        ref={groupRef}
         position={[
           worldPos.x + (width * TILE_SIZE) / 2,
           0,
           worldPos.z + (depth * TILE_SIZE) / 2,
         ]}
         rotation={[0, rotationY, 0]}
-        scale={[1, 1, 1]}
-      />
+      >
+        <primitive object={clonedScene} />
+      </group>
     )
   } catch (error) {
     console.error('Failed to load model:', definition.modelPath, error)
-    // Fallback to procedural if model fails
     return (
       <ProceduralBuilding building={building} definition={definition} />
     )

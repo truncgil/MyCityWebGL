@@ -24,6 +24,7 @@ export function IsometricCamera() {
   const { size, gl } = useThree()
   
   const setHoveredTile = useGameStore((state) => state.setHoveredTile)
+  const setClickedBuilding = useGameStore((state) => state.setClickedBuilding)
   const mode = useGameStore((state) => state.mode)
   const selectedBuilding = useGameStore((state) => state.selectedBuilding)
   const rotation = useGameStore((state) => state.rotation)
@@ -34,6 +35,7 @@ export function IsometricCamera() {
   const removeRoad = useCityStore((state) => state.removeRoad)
   const setZone = useCityStore((state) => state.setZone)
   const getTile = useCityStore((state) => state.getTile)
+  const getBuildingAt = useCityStore((state) => state.getBuildingAt)
   const selectedZone = useGameStore((state) => state.selectedZone)
   
   // Camera state
@@ -72,12 +74,31 @@ export function IsometricCamera() {
     camera.updateProjectionMatrix()
   }, [])
   
+  // Handle click on building (for view mode - show service radius)
+  const handleBuildingClick = useCallback((gridPos: GridPosition) => {
+    const building = getBuildingAt(gridPos)
+    if (building) {
+      setClickedBuilding(building.id)
+    } else {
+      setClickedBuilding(null)
+    }
+  }, [getBuildingAt, setClickedBuilding])
+  
   // Handle placement logic
   const handlePlacement = useCallback((gridPos: GridPosition) => {
     const key = gridPositionToKey(gridPos)
     
+    // In view mode, clicking shows building info
+    if (mode === 'view') {
+      handleBuildingClick(gridPos)
+      return
+    }
+    
     // Don't place on the same tile twice in one drag action
     if (lastPlacedTileRef.current === key) return
+    
+    // Clear clicked building when in build mode
+    setClickedBuilding(null)
     
     let placed = false
     
@@ -104,7 +125,7 @@ export function IsometricCamera() {
     if (placed) {
       lastPlacedTileRef.current = key
     }
-  }, [mode, selectedBuilding, rotation, selectedZone, placeBuilding, placeRoad, setZone, removeBuilding, removeRoad, getTile])
+  }, [mode, selectedBuilding, rotation, selectedZone, placeBuilding, placeRoad, setZone, removeBuilding, removeRoad, getTile, handleBuildingClick, setClickedBuilding])
 
   // Handle keyboard input
   useEffect(() => {

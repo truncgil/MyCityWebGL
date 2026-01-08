@@ -32,7 +32,8 @@ function PedestrianInstances({ buildings }: { buildings: any[] }) {
   })
 
   useFrame((state, delta) => {
-    if (!meshRef.current) return
+    const mesh = meshRef.current
+    if (!mesh) return
     if (buildings.length < 2) return
 
     // Pre-calculate building positions map
@@ -100,12 +101,12 @@ function PedestrianInstances({ buildings }: { buildings: any[] }) {
       }
       dummy.scale.set(0.15, 0.3, 0.15) // Small capsule/box size
       dummy.updateMatrix()
-      meshRef.current.setMatrixAt(i, dummy.matrix)
-      meshRef.current.setColorAt(i, ped.color)
+      mesh.setMatrixAt(i, dummy.matrix)
+      mesh.setColorAt(i, ped.color)
     })
 
-    meshRef.current.instanceMatrix.needsUpdate = true
-    if (meshRef.current.instanceColor) meshRef.current.instanceColor.needsUpdate = true
+    mesh.instanceMatrix.needsUpdate = true
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
   })
 
   return (

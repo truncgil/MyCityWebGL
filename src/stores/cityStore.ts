@@ -221,12 +221,51 @@ export const useCityStore = create<CityStore>()(
           }
         }
         
+        // Calculate rotation to face nearest road (for residential/commercial/industrial)
+        let finalRotation = rotation
+        const shouldFaceRoad = ['residential', 'commercial', 'industrial'].includes(definition.category)
+        
+        if (shouldFaceRoad && state.roads.size > 0) {
+          const buildingCenterX = position.x + definition.size.width / 2
+          const buildingCenterZ = position.z + definition.size.depth / 2
+          
+          // Find nearest road
+          let nearestRoad: { x: number; z: number } | null = null
+          let minDistance = Infinity
+          
+          for (const road of state.roads.values()) {
+            const dx = road.position.x - buildingCenterX
+            const dz = road.position.z - buildingCenterZ
+            const distance = Math.sqrt(dx * dx + dz * dz)
+            
+            if (distance < minDistance) {
+              minDistance = distance
+              nearestRoad = road.position
+            }
+          }
+          
+          // Calculate rotation to face road
+          if (nearestRoad && minDistance < 10) {
+            const dx = nearestRoad.x - buildingCenterX
+            const dz = nearestRoad.z - buildingCenterZ
+            
+            // Determine which direction the road is (N, S, E, W)
+            if (Math.abs(dx) > Math.abs(dz)) {
+              // Road is to the East or West
+              finalRotation = dx > 0 ? 90 : 270
+            } else {
+              // Road is to the North or South
+              finalRotation = dz > 0 ? 180 : 0
+            }
+          }
+        }
+        
         // Create building
         const building: Building = {
           id: generateId(),
           definitionId,
           position,
-          rotation,
+          rotation: finalRotation,
           level: 1,
           occupancy: 0,
           condition: 100,
@@ -262,6 +301,9 @@ export const useCityStore = create<CityStore>()(
           },
         })
         
+        // Immediately recalculate utilities when a building is placed
+        setTimeout(() => get().calculateUtilities(), 0)
+        
         return building
       },
       
@@ -291,6 +333,9 @@ export const useCityStore = create<CityStore>()(
         }
         
         set({ buildings, tiles })
+        
+        // Recalculate utilities when a building is removed
+        setTimeout(() => get().calculateUtilities(), 0)
       },
       
       getBuildingAt: (position) => {

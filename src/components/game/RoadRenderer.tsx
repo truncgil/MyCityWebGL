@@ -105,45 +105,63 @@ function RoadSegment({ road, connections }: { road: Road; connections: Set<strin
   )
 }
 
-// Optimized street lights - every 10 grids, spread evenly
-function StreetLights({ roads, isNight }: { roads: Road[]; isNight: boolean }) {
+// Power station lights - roads near power plants are lit
+function PoweredStreetLights({ roads, isNight }: { roads: Road[]; isNight: boolean }) {
+  const buildings = useCityStore((state) => state.buildings)
+  
   const lightPositions = useMemo(() => {
     if (!isNight || roads.length === 0) return []
     
-    // Sort roads by position for even distribution
-    const sortedRoads = [...roads].sort((a, b) => {
-      const aKey = a.position.x * 1000 + a.position.z
-      const bKey = b.position.x * 1000 + b.position.z
-      return aKey - bKey
-    })
+    // Find power plants
+    const powerPlants = Array.from(buildings.values()).filter(b => 
+      b.definitionId === 'power_plant' && b.isActive
+    )
     
-    // Pick every 10th road for a light
-    const selectedRoads: Road[] = []
-    for (let i = 0; i < sortedRoads.length; i += 10) {
-      selectedRoads.push(sortedRoads[i])
+    if (powerPlants.length === 0) return []
+    
+    // Find roads within power plant radius
+    const litRoads: Road[] = []
+    
+    for (const road of roads) {
+      for (const plant of powerPlants) {
+        const dx = road.position.x - plant.position.x
+        const dz = road.position.z - plant.position.z
+        const distance = Math.sqrt(dx * dx + dz * dz)
+        
+        if (distance <= 15) { // Power plant service radius
+          litRoads.push(road)
+          break
+        }
+      }
     }
     
-    // Limit to max 6 lights for performance
-    const finalRoads = selectedRoads.slice(0, 6)
+    // Pick every 5th road for a light (within powered area)
+    const selectedRoads: Road[] = []
+    for (let i = 0; i < litRoads.length; i += 5) {
+      selectedRoads.push(litRoads[i])
+    }
+    
+    // Limit to max 10 lights
+    const finalRoads = selectedRoads.slice(0, 10)
     
     return finalRoads.map(road => {
       const worldPos = gridToWorld(road.position)
-      return [worldPos.x + TILE_SIZE / 2, 1.2, worldPos.z + TILE_SIZE / 2] as [number, number, number]
+      return [worldPos.x + TILE_SIZE / 2, 1.0, worldPos.z + TILE_SIZE / 2] as [number, number, number]
     })
-  }, [roads, isNight])
+  }, [roads, isNight, buildings])
   
   if (!isNight || lightPositions.length === 0) return null
   
   return (
-    <group name="street-lights">
+    <group name="powered-street-lights">
       {lightPositions.map((pos, i) => (
         <pointLight
           key={i}
           position={pos}
           color="#ffdd99"
-          intensity={2}
-          distance={8}
-          decay={1.5}
+          intensity={1.5}
+          distance={6}
+          decay={2}
         />
       ))}
     </group>
@@ -171,8 +189,8 @@ export function RoadRenderer() {
           connections={connectionSet}
         />
       ))}
-      {/* Single optimized lighting system */}
-      <StreetLights roads={roadArray} isNight={isNight} />
+      {/* Street lights only where power is available */}
+      <PoweredStreetLights roads={roadArray} isNight={isNight} />
     </group>
   )
 }
