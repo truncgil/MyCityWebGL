@@ -58,9 +58,15 @@ export class PopulationSystem extends BaseSimulationSystem {
       if (!building.isPowered) targetOccupancy *= 0.5
       if (!building.hasWater) targetOccupancy *= 0.7
 
-      // Gradually move towards target
-      building.occupancy = lerp(building.occupancy, targetOccupancy, 0.1)
+      // Faster occupancy growth to allow population to start sooner
+      // Use higher lerp factor (0.2 instead of 0.1) for faster convergence
+      building.occupancy = lerp(building.occupancy, targetOccupancy, 0.2)
       building.occupancy = clamp(building.occupancy, 0, 100)
+      
+      // Ensure minimum occupancy for residential buildings (helps initial migration)
+      if (definition.zone === 'residential' && building.occupancy < 20) {
+        building.occupancy = Math.max(building.occupancy, 20) // At least 20% occupancy
+      }
     })
   }
 
@@ -94,9 +100,6 @@ export class PopulationSystem extends BaseSimulationSystem {
     // Calculate available capacity (max population that can live in residential buildings)
     const maxPopulation = Math.floor(occupiedCapacity)
     
-    // Update residential capacity
-    population.residential = totalCapacity
-    
     // Note: Population capping is now handled in processGrowth() to avoid race conditions
     
     // Calculate workers and employment
@@ -105,7 +108,9 @@ export class PopulationSystem extends BaseSimulationSystem {
     const unemployed = workers - employed
     const employmentRate = workers > 0 ? employed / workers : 0
 
-    Object.assign(population, {
+    // Update population state immutably using Zustand action
+    cityStore.updatePopulationState({
+      residential: totalCapacity,
       workers,
       employed,
       unemployed,
@@ -166,8 +171,11 @@ export class PopulationSystem extends BaseSimulationSystem {
     const avgPollution = tiles.size > 0 ? totalPollution / tiles.size : 0
     happiness -= avgPollution * 0.5
 
-    // Clamp and update
-    population.happiness = clamp(happiness, MIN_HAPPINESS, MAX_HAPPINESS)
+    // Clamp and update immutably using Zustand action
+    const clampedHappiness = clamp(happiness, MIN_HAPPINESS, MAX_HAPPINESS)
+    cityStore.updatePopulationState({
+      happiness: clampedHappiness,
+    })
   }
 
   /**
@@ -205,52 +213,69 @@ export class PopulationSystem extends BaseSimulationSystem {
     
     // Migration: stronger when there's capacity but low population
     let migration = 0
-    if (maxPopulation > 0 || totalCapacity > 0) {
+    
+    // Always have some base migration if there are residential buildings or zones
+    if (totalCapacity > 0 || zoneDemand.residential > 0) {
       // Base migration from demand (even if occupancy is low, buildings attract people)
-      const baseDemand = Math.max(zoneDemand.residential / 100, 0.5) // Minimum 0.5 for demand
+      const baseDemand = Math.max(zoneDemand.residential / 100, 0.3) // Minimum 0.3 for demand
       migration = Math.floor(
-        baseDemand * MIGRATION_FACTOR * 15
+        baseDemand * MIGRATION_FACTOR * 20
       )
       
-      // If we have residential buildings but low population, strong migration boost
-      if (totalCapacity > 0 && population.total < Math.max(maxPopulation, totalCapacity * 0.1)) {
-        const targetCapacity = Math.max(maxPopulation, totalCapacity * 0.2) // Target 20% of total capacity
-        const availableCapacity = targetCapacity - population.total
-        if (availableCapacity > 0) {
-          // More aggressive migration at start: 10% of available capacity per day
-          migration += Math.max(1, Math.floor(availableCapacity * 0.1))
+      // If we have residential buildings but low/zero population, very strong migration boost
+      if (totalCapacity > 0) {
+        if (population.total === 0) {
+          // Starting migration: immediately populate 5-10% of capacity
+          const startPopulation = Math.max(1, Math.floor(totalCapacity * 0.08))
+          migration = Math.max(migration, startPopulation)
+        } else if (population.total < Math.max(maxPopulation, totalCapacity * 0.15)) {
+          const targetCapacity = Math.max(maxPopulation, totalCapacity * 0.25) // Target 25% of total capacity
+          const availableCapacity = targetCapacity - population.total
+          if (availableCapacity > 0) {
+            // Aggressive migration: 15% of available capacity per day
+            migration += Math.max(1, Math.floor(availableCapacity * 0.15))
+          }
+        }
+      } else {
+        // Even without buildings, if there's demand, allow small migration (settlers)
+        if (zoneDemand.residential > 20 && population.total === 0) {
+          migration = Math.max(migration, 5) // Small initial settlement
         }
       }
     }
 
-    // Update growth stats
-    population.births = births
-    population.deaths = deaths
-    population.migration = migration
-    population.growth = births - deaths + migration
-
-    // Apply growth to total population
+    // Calculate new population values
+    const growth = births - deaths + migration
     const oldTotal = population.total
-    population.total = Math.max(0, population.total + population.growth)
+    let newTotal = Math.max(0, population.total + growth)
     
     // Cap at maximum capacity
-    if (maxPopulation > 0 && population.total > maxPopulation) {
-      population.total = maxPopulation
+    if (maxPopulation > 0 && newTotal > maxPopulation) {
+      newTotal = maxPopulation
     }
 
     // Update demographics (simplified)
-    const total = population.total
-    population.demographics = {
-      children: Math.floor(total * 0.2),
-      adults: Math.floor(total * 0.65),
-      elderly: Math.floor(total * 0.15),
+    const demographics = {
+      children: Math.floor(newTotal * 0.2),
+      adults: Math.floor(newTotal * 0.65),
+      elderly: Math.floor(newTotal * 0.15),
     }
 
+    // Update population state using Zustand action to ensure reactivity
+    cityStore.updatePopulationState({
+      total: newTotal,
+      growth,
+      births,
+      deaths,
+      migration,
+      demographics,
+    })
+
     // Emit population change event with actual delta
-    const delta = population.total - oldTotal
+    const delta = newTotal - oldTotal
     if (delta !== 0) {
       GameEvents.populationChanged({
-        total: population.total,
+        total: newTotal,
         delta,
       })
     }

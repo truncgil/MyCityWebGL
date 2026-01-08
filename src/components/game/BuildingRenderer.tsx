@@ -45,18 +45,16 @@ function GLTFBuilding({
       scaleRef.current += (targetScale - scaleRef.current) * delta * 3
       groupRef.current.scale.setScalar(scaleRef.current)
       
-      // Update material opacity for unbuilt buildings
-      if (!hasUtilities && needsUtilities) {
-        groupRef.current.traverse((child) => {
-          if (child instanceof THREE.Mesh && child.material) {
-            const mat = child.material as THREE.MeshStandardMaterial
-            if (mat.transparent !== undefined) {
-              mat.transparent = true
-              mat.opacity = 0.5
-            }
+      // Ensure all materials are fully opaque (not transparent)
+      groupRef.current.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.material) {
+          const mat = child.material as THREE.MeshStandardMaterial
+          if (mat.transparent !== undefined) {
+            mat.transparent = false
+            mat.opacity = 1.0
           }
-        })
-      }
+        }
+      })
     }
   })
 
@@ -68,6 +66,24 @@ function GLTFBuilding({
         if (child instanceof THREE.Mesh) {
           child.castShadow = true
           child.receiveShadow = true
+          
+          // Ensure materials are not transparent
+          if (child.material) {
+            // Handle both single materials and arrays
+            const materials = Array.isArray(child.material) 
+              ? child.material 
+              : [child.material]
+            
+            materials.forEach((mat) => {
+              if (mat instanceof THREE.MeshStandardMaterial || 
+                  mat instanceof THREE.MeshBasicMaterial ||
+                  mat instanceof THREE.MeshPhongMaterial ||
+                  mat instanceof THREE.MeshLambertMaterial) {
+                mat.transparent = false
+                mat.opacity = 1.0
+              }
+            })
+          }
         }
       })
       return clone

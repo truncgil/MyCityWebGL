@@ -25,9 +25,9 @@ export function DayNightLighting({ isDaytime, hour }: DayNightLightingProps) {
   // Position: x=30, y=40, z=30 creates nice diagonal lighting
   const sunPosition = new THREE.Vector3(30, 40, 30)
   
-  // Always use daytime colors and intensities
-  const skyColor = new THREE.Color('#87CEEB') // Sky blue
-  const groundColor = new THREE.Color('#3d5c3d') // Green ground
+  // Always use bright, light colors matching the light background
+  const skyColor = new THREE.Color('#E6F3FF') // Very light blue/white - matches background
+  const groundColor = new THREE.Color('#d4e4d4') // Light green ground
   
   return (
     <>

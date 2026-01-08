@@ -73,6 +73,7 @@ interface CityStore {
   
   // Actions - Population
   updatePopulation: (delta: number) => void
+  updatePopulationState: (updates: Partial<PopulationState>) => void
   
   // Actions - Save/Load
   save: () => SaveData
@@ -583,6 +584,15 @@ export const useCityStore = create<CityStore>()(
           population: {
             ...state.population,
             total: Math.max(0, state.population.total + delta),
+          },
+        }))
+      },
+      
+      updatePopulationState: (updates) => {
+        set((state) => ({
+          population: {
+            ...state.population,
+            ...updates,
           },
         }))
       },

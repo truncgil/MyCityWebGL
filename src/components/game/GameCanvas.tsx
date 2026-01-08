@@ -69,30 +69,30 @@ function Scene() {
       {/* Lighting */}
       <DayNightLighting isDaytime={gameTime.isDaytime} hour={gameTime.hour} />
       
-      {/* Environment - Light fog for depth */}
-      <fog attach="fog" args={['#87CEEB', 60, 150]} />
+      {/* Environment - Very light fog matching bright background */}
+      <fog attach="fog" args={['#E6F3FF', 60, 150]} />
       
-      {/* Ground Plane - Brighter for always-daytime */}
+      {/* Ground Plane - Very light for bright background */}
       <mesh 
         rotation={[-Math.PI / 2, 0, 0]} 
         position={[0, -0.01, 0]}
         receiveShadow
       >
         <planeGeometry args={[GRID_SIZE * TILE_SIZE * 2, GRID_SIZE * TILE_SIZE * 2]} />
-        <meshStandardMaterial color="#4a5d4a" />
+        <meshStandardMaterial color="#d4e4d4" />
       </mesh>
       
-      {/* Grid Visualization */}
+      {/* Grid Visualization - Much lighter colors for bright background */}
       {showGrid && (
         <DreiGrid
           position={[0, 0.01, 0]}
           args={[GRID_SIZE * TILE_SIZE, GRID_SIZE * TILE_SIZE]}
           cellSize={TILE_SIZE}
           cellThickness={0.5}
-          cellColor="#4a5568"
+          cellColor="#cbd5e0"
           sectionSize={TILE_SIZE * 10}
           sectionThickness={1}
-          sectionColor="#718096"
+          sectionColor="#e2e8f0"
           fadeDistance={50}
           fadeStrength={1}
           infiniteGrid={false}
