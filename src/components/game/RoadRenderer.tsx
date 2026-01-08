@@ -25,27 +25,17 @@ function RoadModel({
   position: [number, number, number]
   rotation?: number 
 }) {
-  try {
-    const { scene } = useGLTF(modelPath)
-    const clonedScene = useMemo(() => scene.clone(), [scene])
-    
-    return (
-      <primitive 
-        object={clonedScene} 
-        position={position}
-        rotation={[0, rotation * Math.PI / 180, 0]}
-        scale={[1, 1, 1]}
-      />
-    )
-  } catch (error) {
-    console.error('Failed to load road model:', modelPath, error)
-    // Fallback to box if model not found
-    return (
-      <Box args={[TILE_SIZE * 0.9, 0.04, TILE_SIZE * 0.9]} position={position}>
-        <meshStandardMaterial color="#4a5568" roughness={0.8} />
-      </Box>
-    )
-  }
+  const { scene } = useGLTF(modelPath)
+  const clonedScene = useMemo(() => scene.clone(), [scene])
+  
+  return (
+    <primitive 
+      object={clonedScene} 
+      position={position}
+      rotation={[0, rotation * Math.PI / 180, 0]}
+      scale={[1, 1, 1]}
+    />
+  )
 }
 
 // Road segment component
