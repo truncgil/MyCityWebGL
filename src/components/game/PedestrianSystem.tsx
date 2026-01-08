@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, useEffect } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useCityStore } from '@/stores/cityStore'
@@ -9,16 +9,27 @@ import { TILE_SIZE } from '@/lib/constants'
 
 // Simple Pedestrian component using InstancedMesh for performance
 // Since we don't have character models, we use simple capsules/cylinders
-function PedestrianInstances({ buildings }: { buildings: any[] }) {
+function PedestrianInstances({ buildings, population }: { buildings: any[], population: number }) {
   const meshRef = useRef<THREE.InstancedMesh>(null)
   
-  // Create pedestrians
-  const [pedestrians] = useState(() => {
-    // Limit to 30 pedestrians
-    const count = Math.min(30, buildings.length * 2) 
-    if (count === 0) return []
+  // Calculate pedestrian count based on population and buildings
+  const pedestrianCount = useMemo(() => {
+    if (buildings.length === 0) return 0
+    
+    // Base count: 1 pedestrian per 50 population, minimum 2 if there are buildings
+    // Maximum 50 pedestrians for performance
+    const populationBased = Math.max(2, Math.floor(population / 50))
+    const buildingBased = Math.min(30, buildings.length * 2)
+    
+    // Use the higher value, but cap at 50 for performance
+    return Math.min(50, Math.max(populationBased, buildingBased))
+  }, [buildings.length, population])
+  
+  // Create pedestrians - recreate when count changes
+  const [pedestrians, setPedestrians] = useState(() => {
+    if (pedestrianCount === 0) return []
 
-    return Array.from({ length: count }).map(() => ({
+    return Array.from({ length: pedestrianCount }).map(() => ({
       speed: 0.5 + Math.random() * 0.5, // Walking speed
       position: new THREE.Vector3(),
       target: new THREE.Vector3(),
@@ -30,6 +41,23 @@ function PedestrianInstances({ buildings }: { buildings: any[] }) {
       idleTime: 0,
     }))
   })
+
+  // Update pedestrian count when population or buildings change
+  useEffect(() => {
+    if (pedestrians.length !== pedestrianCount) {
+      setPedestrians(Array.from({ length: pedestrianCount }).map(() => ({
+        speed: 0.5 + Math.random() * 0.5,
+        position: new THREE.Vector3(),
+        target: new THREE.Vector3(),
+        currentBuildingId: '',
+        targetBuildingId: '',
+        progress: 0,
+        color: new THREE.Color().setHSL(Math.random(), 0.6, 0.5),
+        state: 'idle' as 'walking' | 'idle',
+        idleTime: 0,
+      })))
+    }
+  }, [pedestrianCount])
 
   useFrame((state, delta) => {
     const mesh = meshRef.current
@@ -109,8 +137,10 @@ function PedestrianInstances({ buildings }: { buildings: any[] }) {
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
   })
 
+  if (pedestrians.length === 0) return null
+
   return (
-    <instancedMesh ref={meshRef} args={[undefined, undefined, 30]}>
+    <instancedMesh ref={meshRef} args={[undefined, undefined, pedestrianCount]}>
       <capsuleGeometry args={[1, 1, 4, 8]} /> 
       <meshStandardMaterial />
     </instancedMesh>
@@ -119,6 +149,8 @@ function PedestrianInstances({ buildings }: { buildings: any[] }) {
 
 export function PedestrianSystem() {
   const buildings = useCityStore((state) => state.buildings)
+  const population = useCityStore((state) => state.population.total)
+  
   const buildingArray = useMemo(() => {
     // Only spawn pedestrians around Residential and Commercial zones
     return Array.from(buildings.values()).filter(b => {
@@ -133,7 +165,7 @@ export function PedestrianSystem() {
 
   return (
     <group>
-      <PedestrianInstances buildings={buildingArray} />
+      <PedestrianInstances buildings={buildingArray} population={population} />
     </group>
   )
 }

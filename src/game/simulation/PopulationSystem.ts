@@ -28,9 +28,9 @@ export class PopulationSystem extends BaseSimulationSystem {
     this.lastUpdateDay = gameTime.day
 
     this.updateOccupancy()
-    this.calculateEmployment()
     this.calculateHappiness()
-    this.processGrowth()
+    this.processGrowth() // Process growth before employment to get updated population
+    this.calculateEmployment()
   }
 
   /**
@@ -97,11 +97,7 @@ export class PopulationSystem extends BaseSimulationSystem {
     // Update residential capacity
     population.residential = totalCapacity
     
-    // Don't override total population here - let it grow naturally
-    // Only cap it if it exceeds capacity
-    if (population.total > maxPopulation && maxPopulation > 0) {
-      population.total = maxPopulation
-    }
+    // Note: Population capping is now handled in processGrowth() to avoid race conditions
     
     // Calculate workers and employment
     const workers = Math.floor(population.total * 0.6) // 60% are workers
@@ -114,12 +110,6 @@ export class PopulationSystem extends BaseSimulationSystem {
       employed,
       unemployed,
       employmentRate,
-    })
-
-    // Emit population change event
-    GameEvents.populationChanged({
-      total: population.total,
-      delta: 0, // Delta will be calculated in processGrowth
     })
   }
 
@@ -185,7 +175,18 @@ export class PopulationSystem extends BaseSimulationSystem {
    */
   private processGrowth(): void {
     const cityStore = useCityStore.getState()
-    const { population, zoneDemand } = cityStore
+    const { population, zoneDemand, buildings, buildingCatalog } = cityStore
+
+    // Calculate max population capacity from residential buildings
+    let maxCapacity = 0
+    buildings.forEach((building) => {
+      const definition = buildingCatalog.find(d => d.id === building.definitionId)
+      if (definition?.zone === 'residential') {
+        const occupancyRate = building.occupancy / 100
+        maxCapacity += definition.capacity * occupancyRate
+      }
+    })
+    const maxPopulation = Math.floor(maxCapacity)
 
     // Calculate growth factors
     const happinessFactor = population.happiness / 100
@@ -197,9 +198,21 @@ export class PopulationSystem extends BaseSimulationSystem {
     // Calculate births, deaths, and migration
     const births = Math.floor(population.total * growthRate * 0.3)
     const deaths = Math.floor(population.total * 0.001)
-    const migration = Math.floor(
-      (zoneDemand.residential / 100) * MIGRATION_FACTOR * 10
-    )
+    
+    // Migration: stronger when there's capacity but low population
+    let migration = 0
+    if (maxPopulation > 0) {
+      // Base migration from demand
+      migration = Math.floor(
+        (zoneDemand.residential / 100) * MIGRATION_FACTOR * 10
+      )
+      
+      // If population is very low but we have capacity, add initial migration boost
+      if (population.total < maxPopulation * 0.1 && maxPopulation > 0) {
+        const availableCapacity = maxPopulation - population.total
+        migration += Math.floor(availableCapacity * 0.05) // 5% of available capacity per day
+      }
+    }
 
     // Update growth stats
     population.births = births
@@ -207,12 +220,30 @@ export class PopulationSystem extends BaseSimulationSystem {
     population.migration = migration
     population.growth = births - deaths + migration
 
+    // Apply growth to total population
+    const oldTotal = population.total
+    population.total = Math.max(0, population.total + population.growth)
+    
+    // Cap at maximum capacity
+    if (maxPopulation > 0 && population.total > maxPopulation) {
+      population.total = maxPopulation
+    }
+
     // Update demographics (simplified)
     const total = population.total
     population.demographics = {
       children: Math.floor(total * 0.2),
       adults: Math.floor(total * 0.65),
       elderly: Math.floor(total * 0.15),
+    }
+
+    // Emit population change event with actual delta
+    const delta = population.total - oldTotal
+    if (delta !== 0) {
+      GameEvents.populationChanged({
+        total: population.total,
+        delta,
+      })
     }
   }
 
