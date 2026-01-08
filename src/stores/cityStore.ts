@@ -307,29 +307,10 @@ export const useCityStore = create<CityStore>()(
       placeRoad: (position) => {
         const state = get()
         const tile = state.getTile(position)
-        
-        console.log('[placeRoad] Position:', position)
-        console.log('[placeRoad] Tile:', tile)
-        console.log('[placeRoad] Balance:', state.economy.balance)
-        
-        if (!tile) {
-          console.log('[placeRoad] FAILED: No tile at position')
-          return null
-        }
-        if (tile.buildingId) {
-          console.log('[placeRoad] FAILED: Tile has building')
-          return null
-        }
-        if (tile.roadId) {
-          console.log('[placeRoad] FAILED: Tile already has road')
-          return null
-        }
+        if (!tile || tile.buildingId || tile.roadId) return null
         
         const roadCost = 10
-        if (state.economy.balance < roadCost) {
-          console.log('[placeRoad] FAILED: Not enough money')
-          return null
-        }
+        if (state.economy.balance < roadCost) return null
         
         const roadId = generateId()
         
@@ -853,6 +834,11 @@ export const useCityStore = create<CityStore>()(
         cityName: state.cityName,
         economy: state.economy,
         population: state.population,
+        zoneDemand: state.zoneDemand,
+        // Convert Maps to arrays for JSON serialization
+        tilesArray: Array.from(state.tiles.entries()),
+        buildingsArray: Array.from(state.buildings.entries()),
+        roadsArray: Array.from(state.roads.entries()),
       }),
       storage: {
         getItem: (name) => {
@@ -861,18 +847,24 @@ export const useCityStore = create<CityStore>()(
           try {
             const parsed = JSON.parse(str)
             
-            // Force reset building catalog from defaults
-            if (parsed.state) {
-              parsed.state.buildingCatalog = DEFAULT_BUILDINGS
-            }
+            // Restore Maps from arrays
+            const tilesArray = parsed.state?.tilesArray || []
+            const buildingsArray = parsed.state?.buildingsArray || []
+            const roadsArray = parsed.state?.roadsArray || []
+            
+            const tiles = new Map(tilesArray)
+            const buildings = new Map(buildingsArray)
+            const roads = new Map(roadsArray)
+            
+            // Remove the array versions from state
+            const { tilesArray: _, buildingsArray: __, roadsArray: ___, ...restState } = parsed.state || {}
             
             return {
               state: {
-                ...parsed.state,
-                tiles: new Map(),
-                buildings: new Map(),
-                roads: new Map(),
-                // Always overwrite catalog
+                ...restState,
+                tiles,
+                buildings,
+                roads,
                 buildingCatalog: DEFAULT_BUILDINGS,
               },
             }

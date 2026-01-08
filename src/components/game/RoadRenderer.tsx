@@ -5,10 +5,11 @@ import { Box, useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 
 import { useCityStore } from '@/stores/cityStore'
+import { useGameStore } from '@/stores/gameStore'
 import { Road } from '@/types/simulation.types'
 import { ROAD_MODELS } from '@/types/building.types'
 import { TILE_SIZE } from '@/lib/constants'
-import { gridToWorld, gridPositionToKey, getAdjacentTiles } from '@/lib/utils'
+import { gridToWorld, gridPositionToKey } from '@/lib/utils'
 
 // Preload road models
 Object.values(ROAD_MODELS).forEach((path) => {
@@ -19,11 +20,11 @@ Object.values(ROAD_MODELS).forEach((path) => {
 function RoadModel({ 
   modelPath, 
   position, 
-  rotation = 0 
+  rotation = 0,
 }: { 
   modelPath: string
   position: [number, number, number]
-  rotation?: number 
+  rotation?: number
 }) {
   const { scene } = useGLTF(modelPath)
   const clonedScene = useMemo(() => scene.clone(), [scene])
@@ -43,73 +44,46 @@ function RoadSegment({ road, connections }: { road: Road; connections: Set<strin
   const worldPos = gridToWorld(road.position)
   
   // Determine road type based on connections
-  const { north, south, east, west, connCount, modelPath, rotation } = useMemo(() => {
+  const { modelPath, rotation } = useMemo(() => {
     const n = connections.has(gridPositionToKey({ x: road.position.x, z: road.position.z - 1 }))
     const s = connections.has(gridPositionToKey({ x: road.position.x, z: road.position.z + 1 }))
     const e = connections.has(gridPositionToKey({ x: road.position.x + 1, z: road.position.z }))
     const w = connections.has(gridPositionToKey({ x: road.position.x - 1, z: road.position.z }))
     
     const count = [n, s, e, w].filter(Boolean).length
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/c52fdedb-d1b1-47ca-80e2-f651b6882607',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoadRenderer.tsx:63',message:'Road connections calculated',data:{n,s,e,w,count},timestamp:Date.now(),sessionId:'debug-session'})}).catch(()=>{});
-    // #endregion
 
     // Determine model and rotation based on connections
     let path = ROAD_MODELS.straight
     let rot = 0
     
     if (count === 4) {
-      // Intersection (4-way)
       path = ROAD_MODELS.intersection
       rot = 0
     } else if (count === 3) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/c52fdedb-d1b1-47ca-80e2-f651b6882607',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoadRenderer.tsx:74',message:'Inside count=3 block',data:{n,s,e,w},timestamp:Date.now(),sessionId:'debug-session'})}).catch(()=>{});
-      // #endregion
-      // T-junction (split)
       path = ROAD_MODELS.split
-      // Model varsayımı: 0 derecede T'nin üstü Kuzey'e bakar (West-North-East) yani Güney boştur.
-      // VEYA: Modelin düz kısmı N-S, çıkıntısı E (N-S-E, Batı boş).
-      // Genelde "split" modellerinde düz yol Z ekseninde, çıkıntı X eksenindedir.
-      
-      // Deneme 1: 0 derece = N-S-E (Batı Boş)
-      if (!e) rot = 0       // Batı boş (N-S-E)
-      else if (!n) rot = 90 // Kuzey boş (E-S-W)
-      else if (!w) rot = 180 // Doğu boş (S-N-W)
-      else if (!s) rot = 270 // Güney boş (W-N-E)
-      
+      if (!e) rot = 0
+      else if (!n) rot = 90
+      else if (!w) rot = 180
+      else if (!s) rot = 270
     } else if (count === 2) {
       if ((n && s) || (e && w)) {
-        // Straight road
         path = ROAD_MODELS.straight_lightposts
         rot = (e && w) ? 90 : 0
       } else {
-        // Corner
         path = ROAD_MODELS.corner
-        if (n && e) rot = 180      // Kuzey-Doğu
-        else if (e && s) rot = 90  // Doğu-Güney
-        else if (s && w) rot = 0   // Güney-Batı
-        else if (w && n) rot = 270 // Batı-Kuzey
+        if (n && e) rot = 180
+        else if (e && s) rot = 90
+        else if (s && w) rot = 0
+        else if (w && n) rot = 270
       }
     } else if (count === 1) {
-      // Dead end - use straight
       path = ROAD_MODELS.straight
       rot = (e || w) ? 90 : 0
     } else {
-      // Isolated
       path = ROAD_MODELS.straight
     }
     
-    return {
-      north: n,
-      south: s,
-      east: e,
-      west: w,
-      connCount: count,
-      modelPath: path,
-      rotation: rot,
-    }
+    return { modelPath: path, rotation: rot }
   }, [road.position, connections])
   
   return (
@@ -130,10 +104,50 @@ function RoadSegment({ road, connections }: { road: Road; connections: Set<strin
   )
 }
 
+// Optimized street lights - only at intersections, max 10 lights
+function StreetLights({ roads, isNight }: { roads: Road[]; isNight: boolean }) {
+  const lightPositions = useMemo(() => {
+    if (!isNight) return []
+    
+    // Find intersections (roads with 3+ connections)
+    const intersections = roads.filter(road => {
+      const connCount = road.connections?.length || 0
+      return connCount >= 2
+    })
+    
+    // Limit to max 8 lights for performance
+    const selectedRoads = intersections.slice(0, 8)
+    
+    return selectedRoads.map(road => {
+      const worldPos = gridToWorld(road.position)
+      return [worldPos.x + TILE_SIZE / 2, 0.8, worldPos.z + TILE_SIZE / 2] as [number, number, number]
+    })
+  }, [roads, isNight])
+  
+  if (!isNight || lightPositions.length === 0) return null
+  
+  return (
+    <group name="street-lights">
+      {lightPositions.map((pos, i) => (
+        <pointLight
+          key={i}
+          position={pos}
+          color="#ffcc77"
+          intensity={1.5}
+          distance={5}
+          decay={2}
+        />
+      ))}
+    </group>
+  )
+}
+
 export function RoadRenderer() {
   const roads = useCityStore((state) => state.roads)
+  const gameTime = useGameStore((state) => state.gameTime)
   
-  // Convert roads map to array and build connection set
+  const isNight = !gameTime.isDaytime
+  
   const { roadArray, connectionSet } = useMemo(() => {
     const roadArray = Array.from(roads.values())
     const connectionSet = new Set(roadArray.map(r => gridPositionToKey(r.position)))
@@ -149,6 +163,8 @@ export function RoadRenderer() {
           connections={connectionSet}
         />
       ))}
+      {/* Single optimized lighting system */}
+      <StreetLights roads={roadArray} isNight={isNight} />
     </group>
   )
 }

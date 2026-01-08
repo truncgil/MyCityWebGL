@@ -76,23 +76,17 @@ export function IsometricCamera() {
   const handlePlacement = useCallback((gridPos: GridPosition) => {
     const key = gridPositionToKey(gridPos)
     
-    // Don't place on the same tile twice in one drag action (unless it's a different tool that allows it)
+    // Don't place on the same tile twice in one drag action
     if (lastPlacedTileRef.current === key) return
-    
-    console.log('[Placement] Mode:', mode, 'Position:', gridPos, 'Key:', key)
     
     let placed = false
     
     if (mode === 'build' && selectedBuilding) {
-      console.log('[Placement] Attempting to place building:', selectedBuilding)
       const result = placeBuilding(selectedBuilding, gridPos, rotation)
       if (result) placed = true
-      console.log('[Placement] Building result:', result)
     } else if (mode === 'road') {
-      console.log('[Placement] Attempting to place road')
       const result = placeRoad(gridPos)
       if (result) placed = true
-      console.log('[Placement] Road result:', result)
     } else if (mode === 'zone' && selectedZone) {
       setZone(gridPos, selectedZone)
       placed = true
