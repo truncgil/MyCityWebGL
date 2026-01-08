@@ -17,7 +17,8 @@ import {
   TILE_SIZE,
   KEY_BINDINGS,
 } from '@/lib/constants'
-import { clamp, gridToWorld, worldToGrid } from '@/lib/utils'
+import { clamp, gridToWorld, worldToGrid, gridPositionToKey } from '@/lib/utils'
+import { GridPosition } from '@/types/game.types'
 
 export function IsometricCamera() {
   const cameraRef = useRef<THREE.OrthographicCamera>(null)
@@ -40,8 +41,12 @@ export function IsometricCamera() {
   const zoomRef = useRef(CAMERA_DEFAULT_ZOOM)
   const targetRef = useRef(new THREE.Vector3(0, 0, 0))
   const keysRef = useRef(new Set<string>())
-  const isDraggingRef = useRef(false)
+  
+  // Interaction state
+  const isDraggingRef = useRef(false) // For camera pan
+  const isLeftMouseDownRef = useRef(false) // For building
   const lastMouseRef = useRef({ x: 0, y: 0 })
+  const lastPlacedTileRef = useRef<string | null>(null)
   
   // Raycaster for mouse picking
   const raycasterRef = useRef(new THREE.Raycaster())
@@ -68,6 +73,40 @@ export function IsometricCamera() {
     camera.updateProjectionMatrix()
   }, [])
   
+  // Handle placement logic
+  const handlePlacement = useCallback((gridPos: GridPosition) => {
+    const key = gridPositionToKey(gridPos)
+    
+    // Don't place on the same tile twice in one drag action (unless it's a different tool that allows it)
+    if (lastPlacedTileRef.current === key) return
+    
+    let placed = false
+    
+    if (mode === 'build' && selectedBuilding) {
+      const result = placeBuilding(selectedBuilding, gridPos, rotation)
+      if (result) placed = true
+    } else if (mode === 'road') {
+      const result = placeRoad(gridPos)
+      if (result) placed = true
+    } else if (mode === 'zone' && selectedZone) {
+      setZone(gridPos, selectedZone)
+      placed = true
+    } else if (mode === 'demolish') {
+      const tile = getTile(gridPos)
+      if (tile?.buildingId) {
+        removeBuilding(tile.buildingId)
+        placed = true
+      } else if (tile?.roadId) {
+        removeRoad(tile.roadId)
+        placed = true
+      }
+    }
+    
+    if (placed) {
+      lastPlacedTileRef.current = key
+    }
+  }, [mode, selectedBuilding, rotation, selectedZone, placeBuilding, placeRoad, setZone, removeBuilding, removeRoad, getTile])
+
   // Handle keyboard input
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -114,48 +153,32 @@ export function IsometricCamera() {
     }
     
     const handleMouseDown = (e: MouseEvent) => {
-      if (e.button === 1 || e.button === 2) { // Middle or right click
+      // Middle or Right click -> Pan
+      if (e.button === 1 || e.button === 2) { 
         isDraggingRef.current = true
         lastMouseRef.current = { x: e.clientX, y: e.clientY }
+      } 
+      // Left click
+      else if (e.button === 0) {
+        // If we are in a building mode, left click means PAINT/BUILD, not pan
+        const isBuildingMode = mode === 'road' || mode === 'zone' || mode === 'build' || mode === 'demolish'
+        
+        if (isBuildingMode) {
+          isLeftMouseDownRef.current = true
+          lastPlacedTileRef.current = null // Reset for new drag
+        } else {
+          // If not in build mode (e.g. view mode), left click can pan too
+          isDraggingRef.current = true
+          lastMouseRef.current = { x: e.clientX, y: e.clientY }
+        }
       }
     }
     
     const handleMouseUp = (e: MouseEvent) => {
       isDraggingRef.current = false
-    }
-    
-    const handleClick = (e: MouseEvent) => {
-      if (e.button !== 0) return // Only left click
-      
-      // Raycast to find clicked tile
-      if (!cameraRef.current) return
-      
-      raycasterRef.current.setFromCamera(mouseRef.current, cameraRef.current)
-      const intersectPoint = new THREE.Vector3()
-      raycasterRef.current.ray.intersectPlane(planeRef.current, intersectPoint)
-      
-      if (intersectPoint) {
-        const gridPos = worldToGrid({
-          x: intersectPoint.x,
-          y: intersectPoint.y,
-          z: intersectPoint.z,
-        })
-        
-        // Handle action based on mode
-        if (mode === 'build' && selectedBuilding) {
-          placeBuilding(selectedBuilding, gridPos, rotation)
-        } else if (mode === 'road') {
-          placeRoad(gridPos)
-        } else if (mode === 'zone' && selectedZone) {
-          setZone(gridPos, selectedZone)
-        } else if (mode === 'demolish') {
-          const tile = getTile(gridPos)
-          if (tile?.buildingId) {
-            removeBuilding(tile.buildingId)
-          } else if (tile?.roadId) {
-            removeRoad(tile.roadId)
-          }
-        }
+      if (e.button === 0) {
+        isLeftMouseDownRef.current = false
+        lastPlacedTileRef.current = null
       }
     }
     
@@ -176,7 +199,6 @@ export function IsometricCamera() {
     canvas.addEventListener('mousemove', handleMouseMove)
     canvas.addEventListener('mousedown', handleMouseDown)
     canvas.addEventListener('mouseup', handleMouseUp)
-    canvas.addEventListener('click', handleClick)
     canvas.addEventListener('wheel', handleWheel, { passive: false })
     canvas.addEventListener('contextmenu', handleContextMenu)
     
@@ -184,13 +206,12 @@ export function IsometricCamera() {
       canvas.removeEventListener('mousemove', handleMouseMove)
       canvas.removeEventListener('mousedown', handleMouseDown)
       canvas.removeEventListener('mouseup', handleMouseUp)
-      canvas.removeEventListener('click', handleClick)
       canvas.removeEventListener('wheel', handleWheel)
       canvas.removeEventListener('contextmenu', handleContextMenu)
     }
-  }, [gl, mode, selectedBuilding, rotation, selectedZone, placeBuilding, placeRoad, setZone, removeBuilding, removeRoad, getTile])
+  }, [gl, mode]) // Re-bind if mode changes to update drag vs pan logic
   
-  // Update hovered tile
+  // Update loop
   useFrame(() => {
     if (!cameraRef.current) return
     
@@ -221,7 +242,7 @@ export function IsometricCamera() {
     // Update camera position
     updateCameraPosition()
     
-    // Update hovered tile
+    // Raycasting for hover and placement
     raycasterRef.current.setFromCamera(mouseRef.current, cameraRef.current)
     const intersectPoint = new THREE.Vector3()
     raycasterRef.current.ray.intersectPlane(planeRef.current, intersectPoint)
@@ -235,6 +256,11 @@ export function IsometricCamera() {
       
       if (gridPos.x >= 0 && gridPos.x < GRID_SIZE && gridPos.z >= 0 && gridPos.z < GRID_SIZE) {
         setHoveredTile(gridPos)
+        
+        // Drag-to-build logic
+        if (isLeftMouseDownRef.current) {
+          handlePlacement(gridPos)
+        }
       } else {
         setHoveredTile(null)
       }

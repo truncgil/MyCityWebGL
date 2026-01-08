@@ -306,16 +306,59 @@ export const useCityStore = create<CityStore>()(
         const roadCost = 10
         if (state.economy.balance < roadCost) return null
         
+        const roadId = generateId()
+        
+        // Helper to get neighbor road
+        const getNeighborRoadId = (x: number, z: number) => {
+          const t = state.getTile({ x, z })
+          return t?.roadId
+        }
+
+        // Check neighbors
+        const neighbors = {
+          north: getNeighborRoadId(position.x, position.z - 1),
+          south: getNeighborRoadId(position.x, position.z + 1),
+          east: getNeighborRoadId(position.x + 1, position.z),
+          west: getNeighborRoadId(position.x - 1, position.z),
+        }
+        
+        const newConnections: { connectedTo: string }[] = []
+        const roadsToUpdate = new Map<string, Road>()
+        const roads = new Map(state.roads)
+
+        // Process neighbors
+        Object.entries(neighbors).forEach(([dir, neighborId]) => {
+          if (neighborId) {
+            const neighborRoad = roads.get(neighborId)
+            if (neighborRoad) {
+              // Add neighbor to new road's connections
+              const neighborKey = gridPositionToKey(neighborRoad.position)
+              newConnections.push({ connectedTo: neighborKey })
+
+              // Add new road to neighbor's connections
+              const newRoadKey = gridPositionToKey(position)
+              if (!neighborRoad.connections.some(c => c.connectedTo === newRoadKey)) {
+                 // Clone neighbor to update
+                 const updatedNeighbor = {
+                   ...neighborRoad,
+                   connections: [...neighborRoad.connections, { connectedTo: newRoadKey }]
+                 }
+                 roads.set(neighborId, updatedNeighbor)
+                 roadsToUpdate.set(neighborId, updatedNeighbor)
+              }
+            }
+          }
+        })
+
         const road: Road = {
-          id: generateId(),
+          id: roadId,
           position,
           type: 'road',
-          connections: [],
+          connections: newConnections,
           trafficLoad: 0,
         }
         
         // Update state
-        const roads = new Map(state.roads)
         roads.set(road.id, road)
         
         const tiles = new Map(state.tiles)
@@ -340,6 +383,26 @@ export const useCityStore = create<CityStore>()(
         if (!road) return
         
         const roads = new Map(state.roads)
+        
+        // Remove connections from neighbors
+        road.connections.forEach(conn => {
+          if (conn.connectedTo) {
+             const neighborPos = keyToGridPosition(conn.connectedTo)
+             const neighborTile = state.getTile(neighborPos)
+             if (neighborTile?.roadId) {
+               const neighborRoad = roads.get(neighborTile.roadId)
+               if (neighborRoad) {
+                 const roadKey = gridPositionToKey(road.position)
+                 const updatedNeighbor = {
+                   ...neighborRoad,
+                   connections: neighborRoad.connections.filter(c => c.connectedTo !== roadKey)
+                 }
+                 roads.set(neighborTile.roadId, updatedNeighbor)
+               }
+             }
+          }
+        })
+
         roads.delete(roadId)
         
         const tiles = new Map(state.tiles)

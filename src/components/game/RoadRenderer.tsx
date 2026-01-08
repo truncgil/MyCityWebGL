@@ -72,22 +72,30 @@ function RoadSegment({ road, connections }: { road: Road; connections: Set<strin
     } else if (count === 3) {
       // T-junction (split)
       path = ROAD_MODELS.split
-      if (!n) rot = 180
-      else if (!s) rot = 0
-      else if (!e) rot = 270
-      else rot = 90
+      // Model varsayımı: 0 derecede T'nin üstü Kuzey'e bakar (West-North-East) yani Güney boştur.
+      // VEYA: Modelin düz kısmı N-S, çıkıntısı E (N-S-E, Batı boş).
+      // Genelde "split" modellerinde düz yol Z ekseninde, çıkıntı X eksenindedir.
+      
+      // Deneme 1: 0 derece = N-S-E (Batı Boş)
+      if (!west) rot = 0       // Batı boş (N-S-E)
+      else if (!north) rot = 90 // Kuzey boş (E-S-W)
+      else if (!east) rot = 180 // Doğu boş (S-N-W)
+      else if (!south) rot = 270 // Güney boş (W-N-E)
+      
     } else if (count === 2) {
       if ((n && s) || (e && w)) {
         // Straight road
         path = ROAD_MODELS.straight_lightposts
         rot = (e && w) ? 90 : 0
       } else {
-        // Corner - model yönüne göre düzeltilmiş
+        // Corner
         path = ROAD_MODELS.corner
-        if (n && w) rot = 0       // Kuzey-Batı köşesi
-        else if (n && e) rot = 90  // Kuzey-Doğu köşesi  
-        else if (s && e) rot = 180 // Güney-Doğu köşesi
-        else rot = 270             // Güney-Batı köşesi (s && w)
+        // Deneme 1: 0 derece = N-E (Kuzey-Doğu)
+        // Eğer olmadıysa 90 derece kaydıracağız
+        if (n && e) rot = 0        // Kuzey-Doğu
+        else if (e && s) rot = 90  // Doğu-Güney
+        else if (s && w) rot = 180 // Güney-Batı
+        else if (w && n) rot = 270 // Batı-Kuzey
       }
     } else if (count === 1) {
       // Dead end - use straight

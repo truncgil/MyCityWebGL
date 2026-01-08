@@ -20,6 +20,7 @@ import { BuildingRenderer } from './BuildingRenderer'
 import { RoadRenderer } from './RoadRenderer'
 import { TileHighlight } from './TileHighlight'
 import { DayNightLighting } from './DayNightLighting'
+import { GameLoop } from './GameLoop'
 import { GRID_SIZE, TILE_SIZE } from '@/lib/constants'
 
 // Scene setup component
@@ -92,6 +93,9 @@ function Scene() {
           infiniteGrid={false}
         />
       )}
+      
+      {/* Game Loop Logic */}
+      <GameLoop />
       
       {/* World Grid (zones) */}
       <WorldGrid />
