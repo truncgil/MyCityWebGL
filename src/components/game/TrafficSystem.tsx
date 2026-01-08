@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useEffect, useCallback } from 'react'
+import { useMemo, useRef, useEffect } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
@@ -35,8 +35,34 @@ CAR_MODELS.forEach((path) => {
   useGLTF.preload(path)
 })
 
-// Lane offset - right side driving
-const LANE_OFFSET = 0.15
+// Lane offset from center - right-hand traffic
+const LANE_OFFSET = 0.18
+
+// ==========================================
+// Helper: Get road center position
+// ==========================================
+function getRoadCenter(road: Road): THREE.Vector3 {
+  const worldPos = gridToWorld(road.position)
+  return new THREE.Vector3(
+    worldPos.x + TILE_SIZE / 2,
+    0.02,
+    worldPos.z + TILE_SIZE / 2
+  )
+}
+
+// ==========================================
+// Helper: Calculate lane position based on direction
+// ==========================================
+function getLanePosition(
+  from: THREE.Vector3,
+  to: THREE.Vector3,
+  laneOffset: number
+): THREE.Vector3 {
+  const direction = new THREE.Vector3().subVectors(to, from).normalize()
+  // Perpendicular vector (right side)
+  const perpendicular = new THREE.Vector3(-direction.z, 0, direction.x)
+  return new THREE.Vector3().copy(to).addScaledVector(perpendicular, laneOffset)
+}
 
 // ==========================================
 // Individual Car Component
@@ -45,60 +71,48 @@ const LANE_OFFSET = 0.15
 interface CarProps {
   carId: string
   modelPath: string
-  lane: 'left' | 'right' // Which lane the car drives in
   roadsRef: React.MutableRefObject<Road[]>
-  initialPosition?: { roadId: string; progress: number }
 }
 
-function Car({ carId, modelPath, lane, roadsRef, initialPosition }: CarProps) {
+function Car({ carId, modelPath, roadsRef }: CarProps) {
   const groupRef = useRef<THREE.Group>(null)
   const { scene } = useGLTF(modelPath)
   
-  // Clone scene for each instance
   const clonedScene = useMemo(() => scene.clone(), [scene])
   
-  // Determine lane offset based on direction
-  const laneOffset = lane === 'right' ? LANE_OFFSET : -LANE_OFFSET
-  
-  // Car state ref - persisted across renders
+  // Car state
   const carState = useRef({
     currentRoadId: '',
-    previousRoadId: '',
-    targetPosition: new THREE.Vector3(),
-    currentPosition: new THREE.Vector3(),
-    progress: Math.random(), // Start at random progress
-    speed: 1.2 + Math.random() * 1.0, // Random speed
+    nextRoadId: '',
+    fromPosition: new THREE.Vector3(),
+    toPosition: new THREE.Vector3(),
+    progress: 0,
+    speed: 0.8 + Math.random() * 0.6,
     isMoving: true,
     initialized: false,
-    direction: new THREE.Vector3(),
   })
 
-  // Initialize position only once
+  // Initialize
   useEffect(() => {
     if (carState.current.initialized) return
     
     const roads = roadsRef.current
     if (roads.length === 0) return
     
-    // Pick a random road to start
     const startRoad = roads[Math.floor(Math.random() * roads.length)]
     if (!startRoad) return
     
     carState.current.currentRoadId = startRoad.id
     carState.current.initialized = true
     
-    const worldPos = gridToWorld(startRoad.position)
-    carState.current.currentPosition.set(
-      worldPos.x + TILE_SIZE / 2,
-      0.02,
-      worldPos.z + TILE_SIZE / 2
-    )
-    carState.current.targetPosition.copy(carState.current.currentPosition)
+    const center = getRoadCenter(startRoad)
+    carState.current.fromPosition.copy(center)
+    carState.current.toPosition.copy(center)
     
     if (groupRef.current) {
-      groupRef.current.position.copy(carState.current.currentPosition)
+      groupRef.current.position.copy(center)
     }
-  }, [roadsRef, laneOffset])
+  }, [roadsRef])
 
   useFrame((_, delta) => {
     if (!groupRef.current || !carState.current.isMoving) return
@@ -106,87 +120,77 @@ function Car({ carId, modelPath, lane, roadsRef, initialPosition }: CarProps) {
     const roads = roadsRef.current
     const state = carState.current
 
-    // Find current road object from latest roads array
     const currentRoad = roads.find(r => r.id === state.currentRoadId)
     
-    // If road deleted, try to find another road
     if (!currentRoad) {
       if (roads.length > 0) {
         const newRoad = roads[Math.floor(Math.random() * roads.length)]
         state.currentRoadId = newRoad.id
-        const worldPos = gridToWorld(newRoad.position)
-        state.currentPosition.set(worldPos.x + TILE_SIZE / 2, 0.02, worldPos.z + TILE_SIZE / 2)
-        state.targetPosition.copy(state.currentPosition)
+        const center = getRoadCenter(newRoad)
+        state.fromPosition.copy(center)
+        state.toPosition.copy(center)
         state.progress = 0
-      } else {
-        state.isMoving = false
+        groupRef.current.position.copy(center)
       }
       return
     }
 
-    // Movement Logic
+    // Progress along current segment
+    state.progress += delta * state.speed
+
     if (state.progress >= 1) {
-      // Reached destination, find next road
+      // Arrived at destination, pick next road
       state.progress = 0
-      state.currentPosition.copy(state.targetPosition)
-      state.previousRoadId = state.currentRoadId
+      state.fromPosition.copy(state.toPosition)
       
       if (currentRoad.connections && currentRoad.connections.length > 0) {
-        // Filter out the road we came from to avoid U-turns (unless it's the only option)
-        const validConnections = currentRoad.connections.filter(
-          conn => {
-            const [cx, cz] = conn.connectedTo.split(',').map(Number)
-            const connRoad = roads.find(r => r.position.x === cx && r.position.z === cz)
-            return connRoad && connRoad.id !== state.previousRoadId
-          }
-        )
+        // Pick a random connection (avoid going back)
+        const connections = currentRoad.connections.filter(conn => {
+          const [cx, cz] = conn.connectedTo.split(',').map(Number)
+          const connRoad = roads.find(r => r.position.x === cx && r.position.z === cz)
+          return connRoad && connRoad.id !== state.nextRoadId
+        })
         
-        const connectionsToUse = validConnections.length > 0 ? validConnections : currentRoad.connections
-        const nextConn = connectionsToUse[Math.floor(Math.random() * connectionsToUse.length)]
+        const useConnections = connections.length > 0 ? connections : currentRoad.connections
+        const nextConn = useConnections[Math.floor(Math.random() * useConnections.length)]
         
         if (nextConn) {
           const [cx, cz] = nextConn.connectedTo.split(',').map(Number)
           const nextRoad = roads.find(r => r.position.x === cx && r.position.z === cz)
           
           if (nextRoad) {
+            state.nextRoadId = state.currentRoadId
             state.currentRoadId = nextRoad.id
-            const nextWorldPos = gridToWorld(nextRoad.position)
             
-            // Calculate direction for lane offset
-            const baseTarget = new THREE.Vector3(
-              nextWorldPos.x + TILE_SIZE / 2,
-              0.02,
-              nextWorldPos.z + TILE_SIZE / 2
+            const nextCenter = getRoadCenter(nextRoad)
+            // Apply lane offset based on movement direction
+            state.toPosition.copy(
+              getLanePosition(state.fromPosition, nextCenter, LANE_OFFSET)
             )
-            
-            // Calculate perpendicular offset for lane
-            state.direction.subVectors(baseTarget, state.currentPosition).normalize()
-            const perpendicular = new THREE.Vector3(-state.direction.z, 0, state.direction.x)
-            
-            state.targetPosition.copy(baseTarget).addScaledVector(perpendicular, laneOffset)
           }
         }
+      } else {
+        // Dead end - stay in place or reverse
+        state.progress = 0
       }
-    } else {
-      // Move towards target
-      state.progress += delta * state.speed * 0.5
+    }
+
+    // Interpolate position
+    const t = Math.min(state.progress, 1)
+    groupRef.current.position.lerpVectors(state.fromPosition, state.toPosition, t)
+    
+    // Rotate towards movement direction
+    const moveDir = new THREE.Vector3().subVectors(state.toPosition, state.fromPosition)
+    if (moveDir.lengthSq() > 0.001) {
+      const targetAngle = Math.atan2(moveDir.x, moveDir.z)
+      const currentAngle = groupRef.current.rotation.y
       
-      const t = Math.min(state.progress, 1)
+      // Smooth rotation
+      let angleDiff = targetAngle - currentAngle
+      while (angleDiff > Math.PI) angleDiff -= Math.PI * 2
+      while (angleDiff < -Math.PI) angleDiff += Math.PI * 2
       
-      // Smooth interpolation
-      groupRef.current.position.lerpVectors(state.currentPosition, state.targetPosition, t)
-      
-      // Smooth rotation towards target
-      if (state.targetPosition.distanceTo(state.currentPosition) > 0.1) {
-        const lookTarget = new THREE.Vector3().copy(state.targetPosition)
-        lookTarget.y = groupRef.current.position.y
-        
-        const targetQuaternion = new THREE.Quaternion()
-        const matrix = new THREE.Matrix4().lookAt(groupRef.current.position, lookTarget, new THREE.Vector3(0, 1, 0))
-        targetQuaternion.setFromRotationMatrix(matrix)
-        
-        groupRef.current.quaternion.slerp(targetQuaternion, delta * 5)
-      }
+      groupRef.current.rotation.y += angleDiff * delta * 8
     }
   })
 
@@ -194,7 +198,7 @@ function Car({ carId, modelPath, lane, roadsRef, initialPosition }: CarProps) {
     <primitive 
       ref={groupRef}
       object={clonedScene}
-      scale={[0.15, 0.15, 0.15]} // Halved from 0.3
+      scale={[0.15, 0.15, 0.15]}
     />
   )
 }
@@ -206,7 +210,6 @@ function Car({ carId, modelPath, lane, roadsRef, initialPosition }: CarProps) {
 interface CarData {
   id: string
   modelPath: string
-  lane: 'left' | 'right'
 }
 
 export function TrafficSystem() {
@@ -222,33 +225,27 @@ export function TrafficSystem() {
   
   // Stable car list - only add new cars, never reset existing ones
   const carsRef = useRef<CarData[]>([])
-  const lastRoadCount = useRef(0)
   
   // Calculate target car count based on road count
   const roadCount = roads.size
-  const targetCarCount = Math.min(30, Math.max(0, Math.floor(roadCount / 2)))
+  const targetCarCount = Math.min(25, Math.max(0, Math.floor(roadCount / 3)))
   
   // Add cars incrementally when roads increase
   useEffect(() => {
     const currentCarCount = carsRef.current.length
     
     if (targetCarCount > currentCarCount) {
-      // Add new cars
       const newCars: CarData[] = []
       for (let i = currentCarCount; i < targetCarCount; i++) {
         newCars.push({
           id: `car-${Date.now()}-${i}`,
           modelPath: CAR_MODELS[Math.floor(Math.random() * CAR_MODELS.length)],
-          lane: Math.random() > 0.5 ? 'right' : 'left',
         })
       }
       carsRef.current = [...carsRef.current, ...newCars]
     }
-    
-    lastRoadCount.current = roadCount
   }, [roadCount, targetCarCount])
   
-  // Force re-render when cars change
   const cars = carsRef.current
 
   if (roadCount === 0) return null
@@ -260,7 +257,6 @@ export function TrafficSystem() {
           key={car.id}
           carId={car.id}
           modelPath={car.modelPath}
-          lane={car.lane}
           roadsRef={roadsRef}
         />
       ))}

@@ -67,7 +67,8 @@ function RoadSegment({ road, connections }: { road: Road; connections: Set<strin
       else if (!s) rot = 270
     } else if (count === 2) {
       if ((n && s) || (e && w)) {
-        path = ROAD_MODELS.straight_lightposts
+        // Use straight road without lightposts for cleaner look
+        path = ROAD_MODELS.straight
         rot = (e && w) ? 90 : 0
       } else {
         path = ROAD_MODELS.corner
@@ -104,23 +105,30 @@ function RoadSegment({ road, connections }: { road: Road; connections: Set<strin
   )
 }
 
-// Optimized street lights - only at intersections, max 10 lights
+// Optimized street lights - every 10 grids, spread evenly
 function StreetLights({ roads, isNight }: { roads: Road[]; isNight: boolean }) {
   const lightPositions = useMemo(() => {
-    if (!isNight) return []
+    if (!isNight || roads.length === 0) return []
     
-    // Find intersections (roads with 3+ connections)
-    const intersections = roads.filter(road => {
-      const connCount = road.connections?.length || 0
-      return connCount >= 2
+    // Sort roads by position for even distribution
+    const sortedRoads = [...roads].sort((a, b) => {
+      const aKey = a.position.x * 1000 + a.position.z
+      const bKey = b.position.x * 1000 + b.position.z
+      return aKey - bKey
     })
     
-    // Limit to max 8 lights for performance
-    const selectedRoads = intersections.slice(0, 8)
+    // Pick every 10th road for a light
+    const selectedRoads: Road[] = []
+    for (let i = 0; i < sortedRoads.length; i += 10) {
+      selectedRoads.push(sortedRoads[i])
+    }
     
-    return selectedRoads.map(road => {
+    // Limit to max 6 lights for performance
+    const finalRoads = selectedRoads.slice(0, 6)
+    
+    return finalRoads.map(road => {
       const worldPos = gridToWorld(road.position)
-      return [worldPos.x + TILE_SIZE / 2, 0.8, worldPos.z + TILE_SIZE / 2] as [number, number, number]
+      return [worldPos.x + TILE_SIZE / 2, 1.2, worldPos.z + TILE_SIZE / 2] as [number, number, number]
     })
   }, [roads, isNight])
   
@@ -132,10 +140,10 @@ function StreetLights({ roads, isNight }: { roads: Road[]; isNight: boolean }) {
         <pointLight
           key={i}
           position={pos}
-          color="#ffcc77"
-          intensity={1.5}
-          distance={5}
-          decay={2}
+          color="#ffdd99"
+          intensity={2}
+          distance={8}
+          decay={1.5}
         />
       ))}
     </group>
