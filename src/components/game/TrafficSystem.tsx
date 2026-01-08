@@ -128,13 +128,16 @@ function Car({ initialRoad, roads, modelPath }: CarProps) {
       // Move towards target
       state.progress += delta * state.speed * 0.5
       
-      // Ensure targetPosition is valid Vector3 before distanceToSq
-      if (state.targetPosition instanceof THREE.Vector3) {
-        if (state.targetPosition.distanceToSq(state.currentPosition) > 0.01) {
-          const newPos = new THREE.Vector3().copy(state.currentPosition)
-          newPos.lerp(state.targetPosition, Math.min(state.progress, 1))
-          groupRef.current.position.copy(newPos)
-        }
+      // Calculate distance squared manually to avoid method missing errors
+      const dx = state.targetPosition.x - state.currentPosition.x
+      const dy = state.targetPosition.y - state.currentPosition.y
+      const dz = state.targetPosition.z - state.currentPosition.z
+      const distSq = dx * dx + dy * dy + dz * dz
+
+      if (distSq > 0.01) {
+        const newPos = new THREE.Vector3().copy(state.currentPosition)
+        newPos.lerp(state.targetPosition, Math.min(state.progress, 1))
+        groupRef.current.position.copy(newPos)
       }
     }
   })
