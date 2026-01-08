@@ -87,11 +87,9 @@ function RoadSegment({ road, connections }: { road: Road; connections: Set<strin
       } else {
         // Corner
         path = ROAD_MODELS.corner
-        // Deneme 1: 0 derece = N-E (Kuzey-Doğu)
-        // Eğer olmadıysa 90 derece kaydıracağız
-        if (n && e) rot = 0        // Kuzey-Doğu
+        if (n && e) rot = 180      // Kuzey-Doğu
         else if (e && s) rot = 90  // Doğu-Güney
-        else if (s && w) rot = 180 // Güney-Batı
+        else if (s && w) rot = 0   // Güney-Batı
         else if (w && n) rot = 270 // Batı-Kuzey
       }
     } else if (count === 1) {
