@@ -1,0 +1,114 @@
+{
+  "app": {
+    "title": "MyCity WebGL",
+    "subtitle": "Isometric City Simulation"
+  },
+  "menu": {
+    "newGame": "New Game",
+    "loadGame": "Load Game",
+    "saveGame": "Save Game",
+    "settings": "Settings",
+    "exit": "Exit"
+  },
+  "toolbar": {
+    "build": "Build",
+    "road": "Road",
+    "zone": "Zone",
+    "demolish": "Demolish",
+    "view": "View"
+  },
+  "zones": {
+    "residential": "Residential",
+    "commercial": "Commercial",
+    "industrial": "Industrial"
+  },
+  "stats": {
+    "population": "Population",
+    "employment": "Employment",
+    "happiness": "Happiness",
+    "budget": "Budget",
+    "income": "Income",
+    "expenses": "Expenses",
+    "netIncome": "Net Income",
+    "day": "Day"
+  },
+  "economy": {
+    "title": "Economy",
+    "balance": "Balance",
+    "taxRates": "Tax Rates",
+    "taxIncome": "Tax Income",
+    "serviceExpenses": "Service Expenses",
+    "maintenance": "Maintenance"
+  },
+  "buildings": {
+    "title": "Buildings",
+    "cost": "Cost",
+    "maintenance": "Maintenance",
+    "capacity": "Capacity",
+    "jobs": "Jobs",
+    "pollution": "Pollution"
+  },
+  "categories": {
+    "residential": "Residential",
+    "commercial": "Commercial",
+    "industrial": "Industrial",
+    "service": "Service",
+    "transport": "Transport",
+    "utility": "Utility",
+    "landmark": "Landmark",
+    "park": "Park"
+  },
+  "buildingNames": {
+    "building_small_a": "Small House A",
+    "building_small_b": "Small House B",
+    "building_small_c": "Medium Building C",
+    "building_small_d": "Apartment D",
+    "building_garage": "Garage",
+    "grass": "Grass",
+    "grass_trees": "Trees",
+    "grass_trees_tall": "Tall Trees",
+    "pavement": "Pavement",
+    "pavement_fountain": "Fountain Plaza"
+  },
+  "overlays": {
+    "none": "Normal",
+    "traffic": "Traffic",
+    "pollution": "Pollution",
+    "landValue": "Land Value",
+    "crime": "Crime",
+    "happiness": "Happiness",
+    "services": "Services"
+  },
+  "speed": {
+    "paused": "Paused",
+    "normal": "Normal",
+    "fast": "Fast",
+    "ultra": "Ultra Fast"
+  },
+  "notifications": {
+    "saved": "Game saved",
+    "loaded": "Game loaded",
+    "reset": "New city started",
+    "insufficientFunds": "Insufficient funds",
+    "cannotPlace": "Cannot place here"
+  },
+  "tips": {
+    "camera": "Use WASD to move the camera",
+    "zoom": "Use mouse wheel to zoom",
+    "rotate": "Press R to rotate building",
+    "demolish": "Press Delete to demolish"
+  },
+  "time": {
+    "day": "Day",
+    "hour": "Hour",
+    "minute": "Minute"
+  },
+  "ui": {
+    "search": "Search...",
+    "close": "Close",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "reset": "Reset",
+    "loading": "Loading..."
+  }
+}

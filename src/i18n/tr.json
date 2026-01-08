@@ -1,0 +1,114 @@
+{
+  "app": {
+    "title": "MyCity WebGL",
+    "subtitle": "İzometrik Şehir Simülasyonu"
+  },
+  "menu": {
+    "newGame": "Yeni Oyun",
+    "loadGame": "Oyun Yükle",
+    "saveGame": "Oyun Kaydet",
+    "settings": "Ayarlar",
+    "exit": "Çıkış"
+  },
+  "toolbar": {
+    "build": "İnşa",
+    "road": "Yol",
+    "zone": "Bölge",
+    "demolish": "Yıkım",
+    "view": "Görünüm"
+  },
+  "zones": {
+    "residential": "Konut",
+    "commercial": "Ticari",
+    "industrial": "Sanayi"
+  },
+  "stats": {
+    "population": "Nüfus",
+    "employment": "İstihdam",
+    "happiness": "Mutluluk",
+    "budget": "Bütçe",
+    "income": "Gelir",
+    "expenses": "Gider",
+    "netIncome": "Net Gelir",
+    "day": "Gün"
+  },
+  "economy": {
+    "title": "Ekonomi",
+    "balance": "Bakiye",
+    "taxRates": "Vergi Oranları",
+    "taxIncome": "Vergi Gelirleri",
+    "serviceExpenses": "Hizmet Giderleri",
+    "maintenance": "Bakım"
+  },
+  "buildings": {
+    "title": "Binalar",
+    "cost": "Maliyet",
+    "maintenance": "Bakım",
+    "capacity": "Kapasite",
+    "jobs": "İş",
+    "pollution": "Kirlilik"
+  },
+  "categories": {
+    "residential": "Konut",
+    "commercial": "Ticari",
+    "industrial": "Sanayi",
+    "service": "Hizmet",
+    "transport": "Ulaşım",
+    "utility": "Altyapı",
+    "landmark": "Simge",
+    "park": "Park"
+  },
+  "buildingNames": {
+    "building_small_a": "Küçük Ev A",
+    "building_small_b": "Küçük Ev B",
+    "building_small_c": "Orta Bina C",
+    "building_small_d": "Apartman D",
+    "building_garage": "Garaj",
+    "grass": "Çim Alan",
+    "grass_trees": "Ağaçlık Alan",
+    "grass_trees_tall": "Yüksek Ağaçlar",
+    "pavement": "Kaldırım",
+    "pavement_fountain": "Çeşmeli Meydan"
+  },
+  "overlays": {
+    "none": "Normal",
+    "traffic": "Trafik",
+    "pollution": "Kirlilik",
+    "landValue": "Arazi Değeri",
+    "crime": "Suç",
+    "happiness": "Mutluluk",
+    "services": "Hizmetler"
+  },
+  "speed": {
+    "paused": "Duraklatıldı",
+    "normal": "Normal",
+    "fast": "Hızlı",
+    "ultra": "Çok Hızlı"
+  },
+  "notifications": {
+    "saved": "Oyun kaydedildi",
+    "loaded": "Oyun yüklendi",
+    "reset": "Yeni şehir başlatıldı",
+    "insufficientFunds": "Yetersiz bakiye",
+    "cannotPlace": "Buraya yerleştirilemez"
+  },
+  "tips": {
+    "camera": "WASD tuşları ile kamerayı hareket ettirin",
+    "zoom": "Fare tekerleği ile yakınlaştırın",
+    "rotate": "R tuşu ile binayı döndürün",
+    "demolish": "Delete tuşu ile yıkın"
+  },
+  "time": {
+    "day": "Gün",
+    "hour": "Saat",
+    "minute": "Dakika"
+  },
+  "ui": {
+    "search": "Ara...",
+    "close": "Kapat",
+    "confirm": "Onayla",
+    "cancel": "İptal",
+    "reset": "Sıfırla",
+    "loading": "Yükleniyor..."
+  }
+}
