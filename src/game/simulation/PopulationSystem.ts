@@ -179,11 +179,15 @@ export class PopulationSystem extends BaseSimulationSystem {
 
     // Calculate max population capacity from residential buildings
     let maxCapacity = 0
+    let totalCapacity = 0
     buildings.forEach((building) => {
       const definition = buildingCatalog.find(d => d.id === building.definitionId)
       if (definition?.zone === 'residential') {
         const occupancyRate = building.occupancy / 100
-        maxCapacity += definition.capacity * occupancyRate
+        // Use at least 10% of capacity even if occupancy is low (allows initial migration)
+        const effectiveOccupancyRate = Math.max(occupancyRate, 0.1)
+        maxCapacity += definition.capacity * effectiveOccupancyRate
+        totalCapacity += definition.capacity
       }
     })
     const maxPopulation = Math.floor(maxCapacity)
@@ -201,16 +205,21 @@ export class PopulationSystem extends BaseSimulationSystem {
     
     // Migration: stronger when there's capacity but low population
     let migration = 0
-    if (maxPopulation > 0) {
-      // Base migration from demand
+    if (maxPopulation > 0 || totalCapacity > 0) {
+      // Base migration from demand (even if occupancy is low, buildings attract people)
+      const baseDemand = Math.max(zoneDemand.residential / 100, 0.5) // Minimum 0.5 for demand
       migration = Math.floor(
-        (zoneDemand.residential / 100) * MIGRATION_FACTOR * 10
+        baseDemand * MIGRATION_FACTOR * 15
       )
       
-      // If population is very low but we have capacity, add initial migration boost
-      if (population.total < maxPopulation * 0.1 && maxPopulation > 0) {
-        const availableCapacity = maxPopulation - population.total
-        migration += Math.floor(availableCapacity * 0.05) // 5% of available capacity per day
+      // If we have residential buildings but low population, strong migration boost
+      if (totalCapacity > 0 && population.total < Math.max(maxPopulation, totalCapacity * 0.1)) {
+        const targetCapacity = Math.max(maxPopulation, totalCapacity * 0.2) // Target 20% of total capacity
+        const availableCapacity = targetCapacity - population.total
+        if (availableCapacity > 0) {
+          // More aggressive migration at start: 10% of available capacity per day
+          migration += Math.max(1, Math.floor(availableCapacity * 0.1))
+        }
       }
     }
 

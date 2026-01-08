@@ -107,7 +107,26 @@ function Car({ carId, modelPath, roadsRef }: CarProps) {
     
     const center = getRoadCenter(startRoad)
     carState.current.fromPosition.copy(center)
-    carState.current.toPosition.copy(center)
+    
+    // Find next road to set initial target
+    if (startRoad.connections && startRoad.connections.length > 0) {
+      const nextConn = startRoad.connections[Math.floor(Math.random() * startRoad.connections.length)]
+      if (nextConn?.connectedTo) {
+        const nextRoad = roads.find(r => r.id === nextConn.connectedTo)
+        if (nextRoad) {
+          const nextCenter = getRoadCenter(nextRoad)
+          carState.current.toPosition.copy(
+            getLanePosition(center, nextCenter, LANE_OFFSET)
+          )
+        } else {
+          carState.current.toPosition.copy(center)
+        }
+      } else {
+        carState.current.toPosition.copy(center)
+      }
+    } else {
+      carState.current.toPosition.copy(center)
+    }
     
     if (groupRef.current) {
       groupRef.current.position.copy(center)
@@ -146,17 +165,16 @@ function Car({ carId, modelPath, roadsRef }: CarProps) {
       if (currentRoad.connections && currentRoad.connections.length > 0) {
         // Pick a random connection (avoid going back)
         const connections = currentRoad.connections.filter(conn => {
-          const [cx, cz] = conn.connectedTo.split(',').map(Number)
-          const connRoad = roads.find(r => r.position.x === cx && r.position.z === cz)
+          if (!conn.connectedTo) return false
+          const connRoad = roads.find(r => r.id === conn.connectedTo)
           return connRoad && connRoad.id !== state.nextRoadId
         })
         
         const useConnections = connections.length > 0 ? connections : currentRoad.connections
         const nextConn = useConnections[Math.floor(Math.random() * useConnections.length)]
         
-        if (nextConn) {
-          const [cx, cz] = nextConn.connectedTo.split(',').map(Number)
-          const nextRoad = roads.find(r => r.position.x === cx && r.position.z === cz)
+        if (nextConn?.connectedTo) {
+          const nextRoad = roads.find(r => r.id === nextConn.connectedTo)
           
           if (nextRoad) {
             state.nextRoadId = state.currentRoadId
@@ -168,10 +186,37 @@ function Car({ carId, modelPath, roadsRef }: CarProps) {
               getLanePosition(state.fromPosition, nextCenter, LANE_OFFSET)
             )
           }
+        } else {
+          // No valid connection, pick a random road
+          if (roads.length > 0) {
+            const randomRoad = roads[Math.floor(Math.random() * roads.length)]
+            if (randomRoad.id !== state.currentRoadId) {
+              state.nextRoadId = state.currentRoadId
+              state.currentRoadId = randomRoad.id
+              const nextCenter = getRoadCenter(randomRoad)
+              state.toPosition.copy(
+                getLanePosition(state.fromPosition, nextCenter, LANE_OFFSET)
+              )
+            }
+          }
         }
       } else {
-        // Dead end - stay in place or reverse
-        state.progress = 0
+        // Dead end - pick a random road to teleport to
+        if (roads.length > 1) {
+          const randomRoad = roads.filter(r => r.id !== state.currentRoadId)[
+            Math.floor(Math.random() * (roads.length - 1))
+          ]
+          if (randomRoad) {
+            state.nextRoadId = state.currentRoadId
+            state.currentRoadId = randomRoad.id
+            const fromCenter = getRoadCenter(currentRoad)
+            const toCenter = getRoadCenter(randomRoad)
+            state.fromPosition.copy(fromCenter)
+            state.toPosition.copy(
+              getLanePosition(fromCenter, toCenter, LANE_OFFSET)
+            )
+          }
+        }
       }
     }
 

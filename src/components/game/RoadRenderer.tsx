@@ -170,9 +170,8 @@ function PoweredStreetLights({ roads, isNight }: { roads: Road[]; isNight: boole
 
 export function RoadRenderer() {
   const roads = useCityStore((state) => state.roads)
-  const gameTime = useGameStore((state) => state.gameTime)
-  
-  const isNight = !gameTime.isDaytime
+  // Always daytime - no night mode
+  const isNight = false
   
   const { roadArray, connectionSet } = useMemo(() => {
     const roadArray = Array.from(roads.values())

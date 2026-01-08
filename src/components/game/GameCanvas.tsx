@@ -32,7 +32,8 @@ function SceneSetup() {
   const { scene } = useThree()
   
   useEffect(() => {
-    scene.background = new THREE.Color('#1a202c')
+    // Very light, bright background - almost white with slight blue tint
+    scene.background = new THREE.Color('#E6F3FF')
   }, [scene])
   
   return null
@@ -68,17 +69,17 @@ function Scene() {
       {/* Lighting */}
       <DayNightLighting isDaytime={gameTime.isDaytime} hour={gameTime.hour} />
       
-      {/* Environment */}
-      <fog attach="fog" args={['#1a202c', 30, 100]} />
+      {/* Environment - Light fog for depth */}
+      <fog attach="fog" args={['#87CEEB', 60, 150]} />
       
-      {/* Ground Plane */}
+      {/* Ground Plane - Brighter for always-daytime */}
       <mesh 
         rotation={[-Math.PI / 2, 0, 0]} 
         position={[0, -0.01, 0]}
         receiveShadow
       >
         <planeGeometry args={[GRID_SIZE * TILE_SIZE * 2, GRID_SIZE * TILE_SIZE * 2]} />
-        <meshStandardMaterial color="#2d3748" />
+        <meshStandardMaterial color="#4a5d4a" />
       </mesh>
       
       {/* Grid Visualization */}
