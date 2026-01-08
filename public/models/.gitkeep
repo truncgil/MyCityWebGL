@@ -1,0 +1,21 @@
+# Placeholder for 3D models
+# Add GLTF/GLB files from Kenney's City Builder Kit here
+# https://kenney.nl/assets/city-builder-kit
+
+# Directory structure:
+# models/
+#   buildings/
+#     house_small.glb
+#     house_medium.glb
+#     ...
+#   roads/
+#     road_straight.glb
+#     road_corner.glb
+#     ...
+#   vehicles/
+#     car.glb
+#     truck.glb
+#     ...
+#   environment/
+#     tree.glb
+#     ...
