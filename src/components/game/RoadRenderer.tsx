@@ -61,6 +61,10 @@ function RoadSegment({ road, connections }: { road: Road; connections: Set<strin
     
     const count = [n, s, e, w].filter(Boolean).length
     
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/c52fdedb-d1b1-47ca-80e2-f651b6882607',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoadRenderer.tsx:63',message:'Road connections calculated',data:{n,s,e,w,count},timestamp:Date.now(),sessionId:'debug-session'})}).catch(()=>{});
+    // #endregion
+
     // Determine model and rotation based on connections
     let path = ROAD_MODELS.straight
     let rot = 0
@@ -70,6 +74,9 @@ function RoadSegment({ road, connections }: { road: Road; connections: Set<strin
       path = ROAD_MODELS.intersection
       rot = 0
     } else if (count === 3) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/c52fdedb-d1b1-47ca-80e2-f651b6882607',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoadRenderer.tsx:74',message:'Inside count=3 block',data:{n,s,e,w},timestamp:Date.now(),sessionId:'debug-session'})}).catch(()=>{});
+      // #endregion
       // T-junction (split)
       path = ROAD_MODELS.split
       // Model varsayımı: 0 derecede T'nin üstü Kuzey'e bakar (West-North-East) yani Güney boştur.
@@ -77,10 +84,10 @@ function RoadSegment({ road, connections }: { road: Road; connections: Set<strin
       // Genelde "split" modellerinde düz yol Z ekseninde, çıkıntı X eksenindedir.
       
       // Deneme 1: 0 derece = N-S-E (Batı Boş)
-      if (!west) rot = 0       // Batı boş (N-S-E)
-      else if (!north) rot = 90 // Kuzey boş (E-S-W)
-      else if (!east) rot = 180 // Doğu boş (S-N-W)
-      else if (!south) rot = 270 // Güney boş (W-N-E)
+      if (!e) rot = 0       // Batı boş (N-S-E)
+      else if (!n) rot = 90 // Kuzey boş (E-S-W)
+      else if (!w) rot = 180 // Doğu boş (S-N-W)
+      else if (!s) rot = 270 // Güney boş (W-N-E)
       
     } else if (count === 2) {
       if ((n && s) || (e && w)) {

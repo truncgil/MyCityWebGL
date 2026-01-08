@@ -41,6 +41,12 @@ interface CityStore {
   // Zone Demand
   zoneDemand: ZoneDemand
   
+  // Actions - Simulation
+  calculateUtilities: () => void
+  growZones: () => void
+  simulateCity: () => void
+  placeBuildingFree: (definitionId: string, position: GridPosition) => void
+
   // Actions - Tiles
   getTile: (position: GridPosition) => TileData | undefined
   setTile: (position: GridPosition, data: Partial<TileData>) => void
@@ -590,6 +596,233 @@ export const useCityStore = create<CityStore>()(
         })
       },
       
+      // Actions - Simulation
+      calculateUtilities: () => {
+        const state = get()
+        const buildings = new Map(state.buildings)
+        const powerSources: Building[] = []
+        const waterSources: Building[] = []
+        
+        // Find sources
+        buildings.forEach(b => {
+           const def = state.getBuildingDefinition(b.definitionId)
+           if (def?.serviceType === 'power') powerSources.push(b)
+           if (def?.serviceType === 'water') waterSources.push(b)
+        })
+        
+        // Helper to check radius
+        const isInRadius = (pos1: GridPosition, pos2: GridPosition, radius: number) => {
+          const dx = pos1.x - pos2.x
+          const dz = pos1.z - pos2.z
+          return Math.sqrt(dx*dx + dz*dz) <= radius
+        }
+        
+        // Reset all statuses
+        buildings.forEach(b => {
+          b.isPowered = false
+          b.hasWater = false
+        })
+        
+        // Update Power
+        powerSources.forEach(source => {
+           const def = state.getBuildingDefinition(source.definitionId)
+           const radius = def?.serviceRadius || 0
+           if (source.isActive) {
+             source.isPowered = true // Source powers itself
+             buildings.forEach(target => {
+               if (isInRadius(source.position, target.position, radius)) {
+                 target.isPowered = true
+               }
+             })
+           }
+        })
+        
+        // Update Water
+        waterSources.forEach(source => {
+           const def = state.getBuildingDefinition(source.definitionId)
+           const radius = def?.serviceRadius || 0
+           if (source.isActive && source.isPowered) { // Water pump needs power!
+             source.hasWater = true // Source has water
+             buildings.forEach(target => {
+               if (isInRadius(source.position, target.position, radius)) {
+                 target.hasWater = true
+               }
+             })
+           }
+        })
+        
+        // Update tiles power/water status for zoning logic
+        // We need to know if a TILE is powered to allow construction
+        // Let's iterate all tiles with zones
+        const tiles = new Map(state.tiles)
+        let tilesChanged = false
+        
+        tiles.forEach(tile => {
+          let isTilePowered = false
+          let isTileWatered = false
+          
+          // Check power
+          for (const source of powerSources) {
+             const def = state.getBuildingDefinition(source.definitionId)
+             if (source.isActive && isInRadius(source.position, tile.position, def?.serviceRadius || 0)) {
+               isTilePowered = true
+               break
+             }
+          }
+          
+          // Check water
+          for (const source of waterSources) {
+             const def = state.getBuildingDefinition(source.definitionId)
+             if (source.isActive && source.isPowered && isInRadius(source.position, tile.position, def?.serviceRadius || 0)) {
+               isTileWatered = true
+               break
+             }
+          }
+          
+          // We don't have isPowered on TileData interface yet, but we can infer it during construction check
+          // Or we can add it to TileData. For now, let's just save it in the building check logic.
+          // Actually, let's just update buildings map since that's what we save.
+          // For Zoning, we will do the check dynamically in growZones.
+        })
+        
+        set({ buildings })
+      },
+
+      growZones: () => {
+        const state = get()
+        const { tiles, buildingCatalog, economy } = state
+        
+        // 1. Find valid empty zoned tiles
+        const validTiles: TileData[] = []
+        tiles.forEach(tile => {
+          if (tile.zone && !tile.buildingId && !tile.roadId) {
+            validTiles.push(tile)
+          }
+        })
+        
+        if (validTiles.length === 0) return
+        
+        // 2. Shuffle to randomize growth
+        const shuffled = validTiles.sort(() => 0.5 - Math.random())
+        
+        // 3. Try to build on a few tiles (limit growth rate)
+        let builtCount = 0
+        const limit = 3 // Max 3 buildings per tick
+        
+        // Recalculate utilities locally to check for new constructions
+        // Actually we should rely on the last calculateUtilities call, 
+        // but we need to check if the EMPTY TILE is in range.
+        const buildings = state.buildings
+        const powerSources: Building[] = []
+        const waterSources: Building[] = []
+        buildings.forEach(b => {
+           const def = state.getBuildingDefinition(b.definitionId)
+           if (def?.serviceType === 'power' && b.isActive) powerSources.push(b)
+           if (def?.serviceType === 'water' && b.isActive && b.isPowered) waterSources.push(b)
+        })
+        
+        const isInRange = (pos: GridPosition, sources: Building[]) => {
+          return sources.some(source => {
+            const def = state.getBuildingDefinition(source.definitionId)
+            const dx = pos.x - source.position.x
+            const dz = pos.z - source.position.z
+            return Math.sqrt(dx*dx + dz*dz) <= (def?.serviceRadius || 0)
+          })
+        }
+
+        for (const tile of shuffled) {
+          if (builtCount >= limit) break
+          
+          // CHECK REQUIREMENTS: Power & Water
+          const hasPower = isInRange(tile.position, powerSources)
+          const hasWater = isInRange(tile.position, waterSources)
+          
+          if (!hasPower || !hasWater) continue // Skip if no utilities
+          
+          // Find suitable building
+          const candidates = buildingCatalog.filter(b => 
+            b.zone === tile.zone && 
+            b.cost <= economy.balance // Should zones cost money? usually private capital.
+            // Let's assume zones build for free for the city, but generate tax
+          )
+          
+          if (candidates.length > 0) {
+             // Pick random candidate (weighted by level/requirements could be better)
+             const buildingDef = candidates[Math.floor(Math.random() * candidates.length)]
+             
+             // Place it (bypass cost check for auto-growth? No, let's use placeBuilding but mock free cost?
+             // Actually placeBuilding deducts money. We should probably have a separate spawnBuilding function
+             // or just let it be free. Let's manually spawn to avoid cost deduction for private buildings.
+             
+             // ... Or better, standard city builders: Zoning is "private investment", doesn't cost City money.
+             // We need a spawn function that doesn't deduct balance.
+             
+             const building: Building = {
+                id: generateId(),
+                definitionId: buildingDef.id,
+                position: tile.position,
+                rotation: 0,
+                level: 1,
+                occupancy: 0,
+                condition: 100,
+                isActive: true,
+                isPowered: true,
+                hasWater: true,
+                createdAt: Date.now(),
+                lastUpdate: Date.now(),
+             }
+             
+             // Update state directly (dirty but fast)
+             // We need to use store set method properly
+             // Let's define a "spawnBuilding" action to handle this clean up later.
+             // For now, call placeBuilding but refund the cost? Hacky.
+             // Let's just create the building object here and batch update at end.
+             
+             state.placeBuildingFree(buildingDef.id, tile.position)
+             builtCount++
+          }
+        }
+      },
+
+      placeBuildingFree: (definitionId, position) => {
+        const state = get()
+        const definition = state.buildingCatalog.find(b => b.id === definitionId)
+        if (!definition) return
+        
+        const building: Building = {
+          id: generateId(),
+          definitionId,
+          position,
+          rotation: 0,
+          level: 1,
+          occupancy: 0,
+          condition: 100,
+          isActive: true,
+          isPowered: false, // Will be updated next utility tick
+          hasWater: false,
+          createdAt: Date.now(),
+          lastUpdate: Date.now(),
+        }
+        
+        const buildings = new Map(state.buildings)
+        buildings.set(building.id, building)
+        
+        const tiles = new Map(state.tiles)
+        const key = gridPositionToKey(position)
+        const tile = tiles.get(key)
+        if (tile) {
+           tiles.set(key, { ...tile, type: 'building', buildingId: building.id })
+        }
+        
+        set({ buildings, tiles })
+      },
+
+      simulateCity: () => {
+         get().calculateUtilities()
+         get().growZones()
+         // Future: calculate income, expenses, population growth here
+      },
+
       // Getters
       getTotalBuildings: () => get().buildings.size,
       getTotalRoads: () => get().roads.size,

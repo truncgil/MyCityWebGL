@@ -4,14 +4,19 @@ import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { useGameStore } from '@/stores/gameStore'
 
+import { useCityStore } from '@/stores/cityStore'
+
 export function GameLoop() {
   const advanceTime = useGameStore((state) => state.advanceTime)
   const gameTime = useGameStore((state) => state.gameTime)
   const isPaused = useGameStore((state) => state.isPaused)
   
+  const simulateCity = useCityStore((state) => state.simulateCity)
+  
   // Accumulate time to advance minutes correctly
   // 1 game minute = X real seconds based on speed
   const accumulatorRef = useRef(0)
+  const lastHourRef = useRef(gameTime.hour)
   
   useFrame((state, delta) => {
     if (isPaused) return
@@ -26,16 +31,20 @@ export function GameLoop() {
     
     accumulatorRef.current += delta * speedMultiplier
     
-    // If enough time passed (e.g. > 1/60th of a second for smooth updates, 
-    // but here we just want to tick minutes)
-    // Let's say 1 real second = 60 game minutes at normal speed? 
-    // Or 1 real second = 1 game minute? 
-    // Let's go with 1 real second = 1 game minute for 'normal' speed.
-    
     if (accumulatorRef.current >= 1) {
       const minutesToAdvance = Math.floor(accumulatorRef.current)
       advanceTime(minutesToAdvance)
       accumulatorRef.current -= minutesToAdvance
+      
+      // Check if hour changed to run simulation
+      // We need to access the NEW time, but state update is async/batched.
+      // However, we can track total minutes passed.
+      // Better: Just check if store's current hour != lastHourRef
+      const currentHour = useGameStore.getState().gameTime.hour
+      if (currentHour !== lastHourRef.current) {
+         simulateCity()
+         lastHourRef.current = currentHour
+      }
     }
   })
   

@@ -15,9 +15,8 @@ import {
   CAMERA_ZOOM_SPEED,
   GRID_SIZE,
   TILE_SIZE,
-  KEY_BINDINGS,
 } from '@/lib/constants'
-import { clamp, gridToWorld, worldToGrid, gridPositionToKey } from '@/lib/utils'
+import { clamp, worldToGrid, gridPositionToKey } from '@/lib/utils'
 import { GridPosition } from '@/types/game.types'
 
 export function IsometricCamera() {

@@ -21,6 +21,9 @@ import { RoadRenderer } from './RoadRenderer'
 import { TileHighlight } from './TileHighlight'
 import { DayNightLighting } from './DayNightLighting'
 import { GameLoop } from './GameLoop'
+import { TrafficSystem } from './TrafficSystem'
+import { PedestrianSystem } from './PedestrianSystem'
+import { StatusOverlay } from './StatusOverlay'
 import { GRID_SIZE, TILE_SIZE } from '@/lib/constants'
 
 // Scene setup component
@@ -105,6 +108,15 @@ function Scene() {
       
       {/* Roads */}
       <RoadRenderer />
+      
+      {/* Traffic */}
+      <TrafficSystem />
+      
+      {/* Pedestrians */}
+      <PedestrianSystem />
+
+      {/* Status Icons */}
+      <StatusOverlay />
       
       {/* Tile Highlight */}
       <TileHighlight />
